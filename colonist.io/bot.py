@@ -3,9 +3,7 @@ import pathlib
 import ssl
 import websockets
 import sys
-
-async def async_input() -> str:
-    return await asyncio.get_event_loop().run_in_executor(None, sys.stdin.readline)
+from aioconsole import ainput
 
 async def consumer_handler(websocket, path):
     async for message in websocket:
@@ -13,7 +11,7 @@ async def consumer_handler(websocket, path):
 
 async def producer_handler(websocket, path):
     while True:
-        message = await async_input()
+        message = await ainput()
         await websocket.send(message)
 
 async def handler(websocket, path):
