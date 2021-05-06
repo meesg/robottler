@@ -115,6 +115,15 @@ window.WebSocket = function (...args) {
     return socket
 }
 
-// function createSettlement () {
-//
-// }
+botSocket.onmessage = function (event) {
+    const parsedData = JSON.parse(event.data)
+    if (parsedData.action === 0) {
+        buildSettlement(0)
+    }
+}
+
+function buildSettlement (settlementId) {
+    const data = { id: "26", data: settlementId }
+    const encodedData = EncoderModule.getInstance().encode(data)
+    sockets[0].send(encodedData)
+}
