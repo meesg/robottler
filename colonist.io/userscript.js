@@ -5,6 +5,15 @@
 // @grant            none
 // ==/UserScript==
 
+const colonistioActions = Object.freeze({
+    THROW_DICE: "15",
+    PASS_TURN: "19",
+    BUY_DEVELOPMENT_CARD: "26",
+    BUILD_ROAD: "23",
+    BUILD_SETTLEMENT: "26",
+    BUILD_CITY: "28"
+})
+
 const EncoderModule = (function () {
     let instance
     /* eslint-disable */
@@ -95,7 +104,7 @@ const EncoderModule = (function () {
 })()
 
 const botSocket = new WebSocket("ws://localhost:8765")
-const sockets = []
+let gameSocket
 const NativeWebSocket = window.WebSocket
 window.WebSocket = function (...args) {
     const socket = new NativeWebSocket(...args)
@@ -111,19 +120,37 @@ window.WebSocket = function (...args) {
         console.log(decodedData)
         nativeSend.apply(this, [data])
     }
-    sockets.push(socket)
+    gameSocket = socket
     return socket
 }
 
 botSocket.onmessage = function (event) {
     const parsedData = JSON.parse(event.data)
-    if (parsedData.action === 0) {
-        buildSettlement(0)
-    }
-}
 
-function buildSettlement (settlementId) {
-    const data = { id: "26", data: settlementId }
-    const encodedData = EncoderModule.getInstance().encode(data)
-    sockets[0].send(encodedData)
+    let gameSocketData
+    switch (parsedData.action) {
+    case 0: // Build road
+        gameSocketData = { id: colonistioActions.BUILD_ROAD, data: parsedData.data } // data: road id
+        break
+    case 1: // Build settlement
+        gameSocketData = { id: colonistioActions.BUILD_SETTLEMENT, data: parsedData.data } // data: settlement id
+        break
+    case 2: // Build city
+        gameSocketData = { id: colonistioActions.BUILD_CITY, data: parsedData.data } // data: settlement id
+        break
+    case 3: // Buy development card
+        gameSocketData = { id: colonistioActions.BUY_DEVELOPMENT_CARD, data: true }
+        break
+    case 4: // Throw dice
+        gameSocketData = { id: colonistioActions.THROW_DICE, data: true }
+        break
+    case 5: // Pass turn
+        gameSocketData = { id: colonistioActions.PASS_TURN, data: true }
+        break
+    default:
+        return
+    }
+
+    const encodedData = EncoderModule.getInstance().encode(gameSocketData)
+    gameSocket.send(encodedData)
 }

@@ -7,7 +7,7 @@ from aioconsole import ainput
 
 async def consumer_handler(websocket, path):
     async for message in websocket:
-        print(message)
+        print(message) # clogs the STDOUT and leads to BlockingIOError: [Errno 11] after a while
 
 async def producer_handler(websocket, path):
     while True:
