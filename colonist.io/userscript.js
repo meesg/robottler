@@ -8,7 +8,7 @@
 const colonistioActions = Object.freeze({
     THROW_DICE: "15",
     PASS_TURN: "19",
-    BUY_DEVELOPMENT_CARD: "26",
+    BUY_DEVELOPMENT_CARD: "21",
     BUILD_ROAD: "23",
     BUILD_SETTLEMENT: "26",
     BUILD_CITY: "28"
