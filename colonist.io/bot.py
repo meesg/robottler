@@ -7,19 +7,23 @@ import ssl
 import sys
 import websockets
 
+playerColor = 1 # TODO: find a way to find this procedurally in ingame lobbies, in standard botgames you're always red (=1)
 gameState = None
 board = None
+queue = None
 
 async def consumer_handler(websocket, path):
     async for message in websocket:
         try:
             data = json.loads(message, object_hook=lambda d: SimpleNamespace(**d))
-            if hasattr(data, "tileState"):
-                print("here")
+            if hasattr(data, "tileState"): # Board information
                 global board
                 board = data
-                print(findHighestProducingSpot())
-            if isinstance(data, list) and hasattr(data[0], "hexCorner"):
+            elif hasattr(data, "currentTurnState"): # Game state information
+                if data.currentTurnPlayerColor == 1 and data.currentActionState == 1:
+                    settlement_index = findHighestProducingSpot()
+                    buildSettlement(settlement_index)
+            elif isinstance(data, list) and hasattr(data[0], "hexCorner"): # Settlement update (probably upgrading to a city works the same)
                 addSettlementToBoard(data[0])
         except:
             pass
@@ -27,7 +31,7 @@ async def consumer_handler(websocket, path):
 
 async def producer_handler(websocket, path):
     while True:
-        message = await ainput()
+        message = await queue.get()
         await websocket.send(message)
 
 async def handler(websocket, path):
@@ -60,7 +64,7 @@ def addSettlementToBoard(newCorner):
     y = newCorner.hexCorner.y
     z = newCorner.hexCorner.z
     corner = findCornerByCoordinates(x, y, z)
-    if corner is None: raise AttributeError("Corner with given coordinates doesn't exist within the board.")
+    if corner is None: raise ValueError("Given coordinates don't exist on the board.")
     corner.owner = newCorner.owner
     
     if z == 0:
@@ -71,7 +75,6 @@ def addSettlementToBoard(newCorner):
         restrictCorner(x - 1, y + 1, 0)
         restrictCorner(x, y + 1, 0)
         restrictCorner(x - 1, y + 2, 0)
-    print(findHighestProducingSpot())
 
 # TODO: Store tiles in a smarter way to make this a O(1) function
 def findTileByCoordinates(x, y):
@@ -86,8 +89,11 @@ def findProductionTileByCoordinates(x, y):
     if not hasattr(tile, '_diceProbability'): return 0
     return tile._diceProbability
 
+# Loops over all hexcorners to find the highest producing spot
+# where its still possible to build a settlement
 def findHighestProducingSpot():
     x = y = z = 0
+    i = high_index = 0
     high_prod = -1
     for corner in board.tileState.tileCorners:
         if corner.owner != 0 or corner.restrictedStartingPlacement is True: continue
@@ -104,8 +110,16 @@ def findHighestProducingSpot():
             x = corner.hexCorner.x
             y = corner.hexCorner.y
             z = corner.hexCorner.z
-    return x, y, z
+            high_index = i
+        i += 1
+    return high_index
 
+def buildSettlement(settlementId):
+    data = { "action": 1, "data": settlementId }
+    dataInJson = json.dumps(data)
+    queue.put_nowait(dataInJson)
+
+queue = asyncio.Queue()
 start_server = websockets.serve(handler, "localhost", 8765)
 asyncio.get_event_loop().run_until_complete(start_server)
 asyncio.get_event_loop().run_forever()
