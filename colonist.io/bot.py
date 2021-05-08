@@ -69,7 +69,6 @@ def restrictCorner(x, y, z):
     print("Restricting: ({x}, {y}, {z})".format(x=x, y=y, z=z))
     corner.restrictedStartingPlacement = True
 
-# TODO: Fix bug because of which this function doesn't always complete
 def addSettlementToBoard(newCorner):
     x = newCorner.hexCorner.x
     y = newCorner.hexCorner.y
@@ -146,12 +145,13 @@ def getRoadIndexByCoordinates(x, y, z):
 # x, y, z: settlement coordinates
 # returns road index
 def getRoadNextToSettlement(x, y, z):
-    print(z)
     if z == 0:
         return getRoadIndexByCoordinates(x, y, 0)
     if z == 1:
         return getRoadIndexByCoordinates(x, y, 2)
     return None
+
+# might want to store the board in the form of a graph
 
 def buildSettlement(settlementIndex):
     send({ "action": 1, "data": settlementIndex })
@@ -160,7 +160,7 @@ def buildRoad(roadIndex):
     send({ "action": 0, "data": roadIndex })
 
 def passTurn():
-    send({ "action": 5, "data": True })
+    send({ "action": 5 })
 
 def send(data):
     dataInJson = json.dumps(data)
