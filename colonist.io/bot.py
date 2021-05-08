@@ -11,6 +11,7 @@ playerColor = 1 # TODO: find a way to find this procedurally in ingame lobbies, 
 gameState = None
 board = None
 queue = None
+lastX = lastY = lastZ = None # TODO: so many things wrong with this, clean this
 turnStarted = False
 
 async def consumer_handler(websocket, path):
@@ -23,12 +24,16 @@ async def consumer_handler(websocket, path):
             elif hasattr(data, "currentTurnState"): # Game state information
                 global turnStarted
                 if data.currentTurnPlayerColor == playerColor and data.currentActionState == 1 and not turnStarted:
-                    print("Settlement turn")
+                    print("Settlement time")
                     turnStarted = True
                     settlement_index = findHighestProducingSpot()
                     buildSettlement(settlement_index)
+                if data.currentTurnPlayerColor == playerColor and data.currentActionState == 3:
+                    print("Road time")
+                    road_index = getRoadNextToSettlement(lastX, lastY, lastZ)
+                    buildRoad(road_index)
                 if data.currentTurnPlayerColor != playerColor:
-                    turnStarted = False
+                    turnStarted = False # TODO: fix end turn check, this doesn't work when bot is last to place first settlement
             elif isinstance(data, list) and hasattr(data[0], "hexCorner"): # Settlement update (probably upgrading to a city works the same)
                 addSettlementToBoard(data[0])
         except:
@@ -119,10 +124,40 @@ def findHighestProducingSpot():
             y = corner.hexCorner.y
             z = corner.hexCorner.z
             high_index = i
+
+    # Store coordinates to create road with later, yeahhhhhhh uhhhmmm
+    global lastX
+    global lastY
+    global lastZ
+    lastX = x
+    lastY = y
+    lastZ = z
+
     return high_index
 
-def buildSettlement(settlementId):
-    send({ "action": 1, "data": settlementId })
+def getRoadIndexByCoordinates(x, y, z):
+    i = 0
+    for edge in board.tileState.tileEdges:
+        if edge.hexEdge.x == x and edge.hexEdge.y == y and edge.hexEdge.z == z:
+            return i
+        i += 1
+    return None
+
+# x, y, z: settlement coordinates
+# returns road index
+def getRoadNextToSettlement(x, y, z):
+    print(z)
+    if z == 0:
+        return getRoadIndexByCoordinates(x, y, 0)
+    if z == 1:
+        return getRoadIndexByCoordinates(x, y, 2)
+    return None
+
+def buildSettlement(settlementIndex):
+    send({ "action": 1, "data": settlementIndex })
+
+def buildRoad(roadIndex):
+    send({ "action": 0, "data": roadIndex })
 
 def passTurn():
     send({ "action": 5, "data": True })

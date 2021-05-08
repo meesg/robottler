@@ -89,7 +89,7 @@ const EncoderModule = (function () {
         ,
         o.p = "/dist"
 
-        return o(540) // The module we need is located in window.webpackJsonp[0][1]
+        return o(540) // The module we need is located in window.webpackJsonp[0][1][540]
     }
     /* eslint-enable */
 
