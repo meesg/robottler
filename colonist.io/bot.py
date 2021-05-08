@@ -100,9 +100,10 @@ def findProductionTileByCoordinates(x, y):
 # where its still possible to build a settlement
 def findHighestProducingSpot():
     x = y = z = 0
-    i = high_index = 0
+    i = high_index = -1
     high_prod = -1
     for corner in board.tileState.tileCorners:
+        i += 1
         if corner.owner != 0 or corner.restrictedStartingPlacement is True: continue
 
         prod = findProductionTileByCoordinates(corner.hexCorner.x, corner.hexCorner.y)
@@ -118,7 +119,6 @@ def findHighestProducingSpot():
             y = corner.hexCorner.y
             z = corner.hexCorner.z
             high_index = i
-        i += 1
     return high_index
 
 def buildSettlement(settlementId):
