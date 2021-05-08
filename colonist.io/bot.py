@@ -11,6 +11,7 @@ playerColor = 1 # TODO: find a way to find this procedurally in ingame lobbies, 
 gameState = None
 board = None
 queue = None
+turnStarted = False
 
 async def consumer_handler(websocket, path):
     async for message in websocket:
@@ -20,9 +21,14 @@ async def consumer_handler(websocket, path):
                 global board
                 board = data
             elif hasattr(data, "currentTurnState"): # Game state information
-                if data.currentTurnPlayerColor == 1 and data.currentActionState == 1:
+                global turnStarted
+                if data.currentTurnPlayerColor == playerColor and data.currentActionState == 1 and not turnStarted:
+                    print("Settlement turn")
+                    turnStarted = True
                     settlement_index = findHighestProducingSpot()
                     buildSettlement(settlement_index)
+                if data.currentTurnPlayerColor != playerColor:
+                    turnStarted = False
             elif isinstance(data, list) and hasattr(data[0], "hexCorner"): # Settlement update (probably upgrading to a city works the same)
                 addSettlementToBoard(data[0])
         except:
@@ -54,8 +60,8 @@ def findCornerByCoordinates(x, y, z):
 
 def restrictCorner(x, y, z):
     corner = findCornerByCoordinates(x, y, z)
-    # print("Restricting: ({x}, {y}, {z})".format(x=x, y=y, z=z))
     if corner is None: return
+    print("Restricting: ({x}, {y}, {z})".format(x=x, y=y, z=z))
     corner.restrictedStartingPlacement = True
 
 # TODO: Fix bug because of which this function doesn't always complete
@@ -63,6 +69,7 @@ def addSettlementToBoard(newCorner):
     x = newCorner.hexCorner.x
     y = newCorner.hexCorner.y
     z = newCorner.hexCorner.z
+    print("Adding settlement: ({x}, {y}, {z})".format(x=x, y=y, z=z))
     corner = findCornerByCoordinates(x, y, z)
     if corner is None: raise ValueError("Given coordinates don't exist on the board.")
     corner.owner = newCorner.owner
@@ -115,7 +122,12 @@ def findHighestProducingSpot():
     return high_index
 
 def buildSettlement(settlementId):
-    data = { "action": 1, "data": settlementId }
+    send({ "action": 1, "data": settlementId })
+
+def passTurn():
+    send({ "action": 5, "data": True })
+
+def send(data):
     dataInJson = json.dumps(data)
     queue.put_nowait(dataInJson)
 
