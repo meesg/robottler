@@ -1,7 +1,5 @@
 # TODO
-1. Intercept the message for when our turn begins.
-2. Send message to userscript to create settlement
-3. Place road (random is fine for now)
-4. End turn
-- Keep track of turn number
-- Create gamestate: place settlements for turn 1 and 2, normal turn after
+### Initial settlements
+ - [ ] Add a check if we have passed the turn since starting it, so we don't send the message to build the settlement twice (necessary because colonist.io likes to send the turn information twice for some reason)  
+ - [ ] Place road (random is fine for now)  
+ - [ ] End turn  
