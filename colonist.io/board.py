@@ -13,8 +13,8 @@ class Board:
             z = vertex.hexCorner.z 
             
             # TODO: clean up lambda, maybe use a function instead
-            data = map(lambda edge_index: { edge_index: self.getOtherVertexNextToEdge(self.board_state.tileState.tileEdges[edge_index], vertex) }, self.getEdgesNextToVertex(x, y, z))
-            self.adjacency_map.append(data)
+            data = map(lambda edge_index: { "edge": edge_index, "vertex": self.getOtherVertexNextToEdge(self.board_state.tileState.tileEdges[edge_index], vertex) }, self.getEdgesNextToVertex(x, y, z))
+            self.adjacency_map.append(list(data))
 
     def getEdgeIndexByCoordinates(self, x, y, z):
         i = 0

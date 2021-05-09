@@ -9,12 +9,13 @@ import websockets
 
 from board import Board
 
-playerColor = 1 # TODO: find a way to find this procedurally in ingame lobbies, in standard botgames you're always red (=1)
-gameState = None
+player_color = 1 # TODO: find a way to find this procedurally in ingame lobbies, in standard bot games this works because you're always red (=1)
+game_state = None
 board = None
 board_state = None
 queue = None
-lastX = lastY = lastZ = None # TODO: so many things wrong with this, clean this
+last_x = last_y = last_z = None # TODO: so many things wrong with this, clean this
+own_settlements = []
 turnStarted = False
 
 async def consumer_handler(websocket, path):
@@ -22,21 +23,22 @@ async def consumer_handler(websocket, path):
         try:
             data = json.loads(message, object_hook=lambda d: SimpleNamespace(**d))
             if hasattr(data, "tileState"): # Board information
+                global board
                 global board_state
                 board_state = data
                 board = Board(data)
             elif hasattr(data, "currentTurnState"): # Game state information
                 global turnStarted
-                if data.currentTurnPlayerColor == playerColor and data.currentActionState == 1 and not turnStarted:
+                if data.currentTurnPlayerColor == player_color and data.currentActionState == 1 and not turnStarted:
                     print("Settlement time")
                     turnStarted = True
                     settlement_index = findHighestProducingSpot()
                     buildSettlement(settlement_index)
-                if data.currentTurnPlayerColor == playerColor and data.currentActionState == 3:
+                if data.currentTurnPlayerColor == player_color and data.currentActionState == 3:
                     print("Road time")
-                    road_index = getRoadNextToSettlement(lastX, lastY, lastZ)
+                    road_index = getRoadNextToSettlement(last_x, last_y, last_z)
                     buildRoad(road_index)
-                if data.currentTurnPlayerColor != playerColor:
+                if data.currentTurnPlayerColor != player_color:
                     turnStarted = False # TODO: fix end turn check, this doesn't work when bot is last to place first settlement
             elif isinstance(data, list) and hasattr(data[0], "hexCorner"): # Settlement update (probably upgrading to a city works the same)
                 addSettlementToBoard(data[0])
@@ -129,12 +131,15 @@ def findHighestProducingSpot():
             high_index = i
 
     # Store coordinates to create road with later, yeahhhhhhh uhhhmmm
-    global lastX
-    global lastY
-    global lastZ
-    lastX = x
-    lastY = y
-    lastZ = z
+    global last_x
+    global last_y
+    global last_z
+    global own_settlements
+    last_x = x
+    last_y = y
+    last_z = z
+    own_settlements.append(high_index)
+    findNextSettlement()
 
     return high_index
 
@@ -155,7 +160,23 @@ def getRoadNextToSettlement(x, y, z):
         return getRoadIndexByCoordinates(x, y, 2)
     return None
 
-# might want to store the board in the form of a graph
+def findNextSettlement():
+    for settlement_index in own_settlements:
+        candidates = findNeighboursByDegree(None, settlement_index, 2)
+        print(candidates)
+
+def findNeighboursByDegree(prev_vertex_index, vertex_index, degree):
+    print("findNeighboursByDegree({0}, {1}, {2})".format(prev_vertex_index, vertex_index, degree))
+    if degree <= 0: return vertex_index
+
+    neighbours = []
+    global board
+    print("board : {0}".format(board.adjacency_map[vertex_index][0]))
+    for entry in board.adjacency_map[vertex_index]:
+        if prev_vertex_index != entry["vertex"]:
+            neighbours.append(findNeighboursByDegree(vertex_index, entry["vertex"], degree - 1))
+        
+    return neighbours
 
 def buildSettlement(settlementIndex):
     send({ "action": 1, "data": settlementIndex })
