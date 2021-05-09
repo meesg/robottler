@@ -1,24 +1,30 @@
 class Board:
-    board_state = None
+    tiles = None
+    vertices = None
+    edges = None
+
     adjacency_map = []
 
     def __init__(self, board):
-        self.board_state = board
+        self.tiles = board.tileState.tiles
+        self.vertices = board.tileState.tileCorners
+        self.edges = board.tileState.tileEdges
+
         self.buildAdjencyMap()
 
     def buildAdjencyMap(self):
-        for vertex in self.board_state.tileState.tileCorners:
+        for vertex in self.vertices:
             x = vertex.hexCorner.x
             y = vertex.hexCorner.y
             z = vertex.hexCorner.z 
             
             # TODO: clean up lambda, maybe use a function instead
-            data = map(lambda edge_index: { "edge": edge_index, "vertex": self.getOtherVertexNextToEdge(self.board_state.tileState.tileEdges[edge_index], vertex) }, self.getEdgesNextToVertex(x, y, z))
+            data = map(lambda edge_index: { "edge_index": edge_index, "vertex_index": self.getOtherVertexNextToEdge(self.edges[edge_index], vertex) }, self.getEdgesNextToVertex(x, y, z))
             self.adjacency_map.append(list(data))
 
     def getEdgeIndexByCoordinates(self, x, y, z):
         i = 0
-        for edge in self.board_state.tileState.tileEdges:
+        for edge in self.edges:
             if edge.hexEdge.x == x and edge.hexEdge.y == y and edge.hexEdge.z == z:
                 return i
             i += 1
@@ -42,7 +48,7 @@ class Board:
         return edges
 
     def findVertexIndexByCoordinates(self, x, y, z): 
-        for vertex_index, vertex in enumerate(self.board_state.tileState.tileCorners):
+        for vertex_index, vertex in enumerate(self.vertices):
             if vertex.hexCorner.x == x and vertex.hexCorner.y == y and vertex.hexCorner.z == z:
                 return vertex_index
         return None
@@ -67,7 +73,7 @@ class Board:
 
     def getOtherVertexNextToEdge(self, edge, vertex):
         vertices = self.getVerticesNextToEdge(edge)
-        for v in vertices:
-            if self.board_state.tileState.tileCorners[v] != vertex:
-                return v
+        for index in vertices:
+            if self.vertices[index] != vertex:
+                return index
         return None

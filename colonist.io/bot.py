@@ -10,13 +10,11 @@ import websockets
 from board import Board
 
 player_color = 1 # TODO: find a way to find this procedurally in ingame lobbies, in standard bot games this works because you're always red (=1)
-game_state = None
 board = None
-board_state = None
 queue = None
 last_x = last_y = last_z = None # TODO: so many things wrong with this, clean this
 own_settlements = []
-turnStarted = False
+turn_started = False
 
 async def consumer_handler(websocket, path):
     async for message in websocket:
@@ -24,14 +22,12 @@ async def consumer_handler(websocket, path):
             data = json.loads(message, object_hook=lambda d: SimpleNamespace(**d))
             if hasattr(data, "tileState"): # Board information
                 global board
-                global board_state
-                board_state = data
                 board = Board(data)
             elif hasattr(data, "currentTurnState"): # Game state information
-                global turnStarted
-                if data.currentTurnPlayerColor == player_color and data.currentActionState == 1 and not turnStarted:
+                global turn_started
+                if data.currentTurnPlayerColor == player_color and data.currentActionState == 1 and not turn_started:
                     print("Settlement time")
-                    turnStarted = True
+                    turn_started = True
                     settlement_index = findHighestProducingSpot()
                     buildSettlement(settlement_index)
                 if data.currentTurnPlayerColor == player_color and data.currentActionState == 3:
@@ -39,7 +35,7 @@ async def consumer_handler(websocket, path):
                     road_index = getRoadNextToSettlement(last_x, last_y, last_z)
                     buildRoad(road_index)
                 if data.currentTurnPlayerColor != player_color:
-                    turnStarted = False # TODO: fix end turn check, this doesn't work when bot is last to place first settlement
+                    turn_started = False # TODO: fix end turn check, this doesn't work when bot is last to place first settlement
             elif isinstance(data, list) and hasattr(data[0], "hexCorner"): # Settlement update (probably upgrading to a city works the same)
                 addSettlementToBoard(data[0])
         except:
@@ -64,7 +60,8 @@ async def handler(websocket, path):
         task.cancel()
 
 def findCornerByCoordinates(x, y, z): 
-    for corner in board_state.tileState.tileCorners:
+    global board
+    for corner in board.vertices:
         if corner.hexCorner.x == x and corner.hexCorner.y == y and corner.hexCorner.z == z:
             return corner
     return None
@@ -95,7 +92,8 @@ def addSettlementToBoard(newCorner):
 
 # TODO: Store tiles in a smarter way to make this a O(1) function
 def findTileByCoordinates(x, y):
-    for tile in board_state.tileState.tiles:
+    global board
+    for tile in board.tiles:
         if tile.hexFace.x == x and tile.hexFace.y == y:
             return tile
     return None
@@ -109,10 +107,11 @@ def findProductionTileByCoordinates(x, y):
 # Loops over all hexcorners to find the highest producing spot
 # where its still possible to build a settlement
 def findHighestProducingSpot():
+    global board
     x = y = z = 0
     i = high_index = -1
     high_prod = -1
-    for corner in board_state.tileState.tileCorners:
+    for corner in board.vertices:
         i += 1
         if corner.owner != 0 or corner.restrictedStartingPlacement is True: continue
 
@@ -144,8 +143,9 @@ def findHighestProducingSpot():
     return high_index
 
 def getRoadIndexByCoordinates(x, y, z):
+    global board
     i = 0
-    for edge in board_state.tileState.tileEdges:
+    for edge in board.edges:
         if edge.hexEdge.x == x and edge.hexEdge.y == y and edge.hexEdge.z == z:
             return i
         i += 1
@@ -173,8 +173,10 @@ def findNeighboursByDegree(prev_vertex_index, vertex_index, degree):
     global board
     print("board : {0}".format(board.adjacency_map[vertex_index][0]))
     for entry in board.adjacency_map[vertex_index]:
-        if prev_vertex_index != entry["vertex"]:
-            neighbours.append(findNeighboursByDegree(vertex_index, entry["vertex"], degree - 1))
+        vertex = board.vertices[entry["vertex_index"]]
+        edge = board.edges[entry["edge_index"]]
+        if prev_vertex_index != entry["vertex_index"] and vertex.owner == 0 and edge.owner == 0:
+            neighbours.append(findNeighboursByDegree(vertex_index, entry["vertex_index"], degree - 1))
         
     return neighbours
 
