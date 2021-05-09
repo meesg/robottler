@@ -7,9 +7,12 @@ import ssl
 import sys
 import websockets
 
+from board import Board
+
 playerColor = 1 # TODO: find a way to find this procedurally in ingame lobbies, in standard botgames you're always red (=1)
 gameState = None
 board = None
+board_state = None
 queue = None
 lastX = lastY = lastZ = None # TODO: so many things wrong with this, clean this
 turnStarted = False
@@ -19,8 +22,9 @@ async def consumer_handler(websocket, path):
         try:
             data = json.loads(message, object_hook=lambda d: SimpleNamespace(**d))
             if hasattr(data, "tileState"): # Board information
-                global board
-                board = data
+                global board_state
+                board_state = data
+                board = Board(data)
             elif hasattr(data, "currentTurnState"): # Game state information
                 global turnStarted
                 if data.currentTurnPlayerColor == playerColor and data.currentActionState == 1 and not turnStarted:
@@ -58,7 +62,7 @@ async def handler(websocket, path):
         task.cancel()
 
 def findCornerByCoordinates(x, y, z): 
-    for corner in board.tileState.tileCorners:
+    for corner in board_state.tileState.tileCorners:
         if corner.hexCorner.x == x and corner.hexCorner.y == y and corner.hexCorner.z == z:
             return corner
     return None
@@ -89,7 +93,7 @@ def addSettlementToBoard(newCorner):
 
 # TODO: Store tiles in a smarter way to make this a O(1) function
 def findTileByCoordinates(x, y):
-    for tile in board.tileState.tiles:
+    for tile in board_state.tileState.tiles:
         if tile.hexFace.x == x and tile.hexFace.y == y:
             return tile
     return None
@@ -106,7 +110,7 @@ def findHighestProducingSpot():
     x = y = z = 0
     i = high_index = -1
     high_prod = -1
-    for corner in board.tileState.tileCorners:
+    for corner in board_state.tileState.tileCorners:
         i += 1
         if corner.owner != 0 or corner.restrictedStartingPlacement is True: continue
 
@@ -136,7 +140,7 @@ def findHighestProducingSpot():
 
 def getRoadIndexByCoordinates(x, y, z):
     i = 0
-    for edge in board.tileState.tileEdges:
+    for edge in board_state.tileState.tileEdges:
         if edge.hexEdge.x == x and edge.hexEdge.y == y and edge.hexEdge.z == z:
             return i
         i += 1

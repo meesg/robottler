@@ -1,27 +1,24 @@
 class Board:
-    board = None
-    adjacencyMap = []
+    board_state = None
+    adjacency_map = []
 
     def __init__(self, board):
-        self.board = board
-        self.buildEdgeList()
+        self.board_state = board
+        self.buildAdjencyMap()
 
-    def buildEdgeList(self):
-        for verted_index, vertex in enumerate(self.board.tileState.tileCorners):
+    def buildAdjencyMap(self):
+        for vertex in self.board_state.tileState.tileCorners:
             x = vertex.hexCorner.x
             y = vertex.hexCorner.y
             z = vertex.hexCorner.z 
-
+            
             # TODO: clean up lambda, maybe use a function instead
-            data = map(lambda edge_index: { 
-                edge_index : self.getOtherVertexNextToEdge(self.board.tileState.tileEdges[edge_index], vertex)
-                }, self.getEgdesNextToVertex(x, y, z))
-            entry = { verted_index: data }
-            self.adjacencyMap.append(entry)
+            data = map(lambda edge_index: { edge_index: self.getOtherVertexNextToEdge(self.board_state.tileState.tileEdges[edge_index], vertex) }, self.getEdgesNextToVertex(x, y, z))
+            self.adjacency_map.append(data)
 
     def getEdgeIndexByCoordinates(self, x, y, z):
         i = 0
-        for edge in self.board.tileState.tileEdges:
+        for edge in self.board_state.tileState.tileEdges:
             if edge.hexEdge.x == x and edge.hexEdge.y == y and edge.hexEdge.z == z:
                 return i
             i += 1
@@ -29,7 +26,7 @@ class Board:
 
     # x, y, z: edge coordinates
     # returns 
-    def getEgdesNextToVertex(self, x, y, z):
+    def getEdgesNextToVertex(self, x, y, z):
         edges = []
         if z == 0:
             edges.append(self.getEdgeIndexByCoordinates(x, y, 0))
@@ -40,12 +37,12 @@ class Board:
             edges.append(self.getEdgeIndexByCoordinates(x, y + 1, 1))
             edges.append(self.getEdgeIndexByCoordinates(x, y, 2))
 
-        list(filter(lambda a: a != None, edges)) # remove None roads for vertices next to harbor tiles
+        edges = [x for x in edges if x is not None] # remove None roads for vertices next to harbor tiles
 
         return edges
 
     def findVertexIndexByCoordinates(self, x, y, z): 
-        for vertex_index, vertex in enumerate(self.board.tileState.tileCorners):
+        for vertex_index, vertex in enumerate(self.board_state.tileState.tileCorners):
             if vertex.hexCorner.x == x and vertex.hexCorner.y == y and vertex.hexCorner.z == z:
                 return vertex_index
         return None
@@ -64,13 +61,13 @@ class Board:
             vertices.append(self.findVertexIndexByCoordinates(x - 1, y + 1, 0))
         if z == 2:
             vertices.append(self.findVertexIndexByCoordinates(x - 1, y + 1, 0))
-            vertices.append(self.findVertexIndexByCoordinates(x, y - 1, 1))
+            vertices.append(self.findVertexIndexByCoordinates(x, y, 1))
 
         return vertices
 
     def getOtherVertexNextToEdge(self, edge, vertex):
         vertices = self.getVerticesNextToEdge(edge)
         for v in vertices:
-            if v != vertex:
+            if self.board_state.tileState.tileCorners[v] != vertex:
                 return v
         return None
