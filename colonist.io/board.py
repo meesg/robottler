@@ -3,6 +3,7 @@ class Board:
     vertices = None
     edges = None
 
+    own_settlements = []
     adjacency_map = []
 
     def __init__(self, board):

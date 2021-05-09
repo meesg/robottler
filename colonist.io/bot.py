@@ -12,8 +12,6 @@ from board import Board
 player_color = 1 # TODO: find a way to find this procedurally in ingame lobbies, in standard bot games this works because you're always red (=1)
 board = None
 queue = None
-last_x = last_y = last_z = None # TODO: so many things wrong with this, clean this
-own_settlements = []
 turn_started = False
 
 async def consumer_handler(websocket, path):
@@ -29,10 +27,16 @@ async def consumer_handler(websocket, path):
                     print("Settlement time")
                     turn_started = True
                     settlement_index = findHighestProducingSpot()
+
                     buildSettlement(settlement_index)
+                    global board
+                    board.own_settlements.append(settlement_index)
                 if data.currentTurnPlayerColor == player_color and data.currentActionState == 3:
                     print("Road time")
-                    road_index = getRoadNextToSettlement(last_x, last_y, last_z)
+                    x = board.vertices[board.own_settlements[-1]].hexCorner.x
+                    y = board.vertices[board.own_settlements[-1]].hexCorner.y
+                    z = board.vertices[board.own_settlements[-1]].hexCorner.z
+                    road_index = getRoadNextToSettlement(x, y, z)
                     buildRoad(road_index)
                 if data.currentTurnPlayerColor != player_color:
                     turn_started = False # TODO: fix end turn check, this doesn't work when bot is last to place first settlement
@@ -40,7 +44,6 @@ async def consumer_handler(websocket, path):
                 addSettlementToBoard(data[0])
         except:
             pass
-        # print(message) # clogs the STDOUT and leads to BlockingIOError: [Errno 11] after a while
 
 async def producer_handler(websocket, path):
     while True:
@@ -60,7 +63,6 @@ async def handler(websocket, path):
         task.cancel()
 
 def findCornerByCoordinates(x, y, z): 
-    global board
     for corner in board.vertices:
         if corner.hexCorner.x == x and corner.hexCorner.y == y and corner.hexCorner.z == z:
             return corner
@@ -92,7 +94,6 @@ def addSettlementToBoard(newCorner):
 
 # TODO: Store tiles in a smarter way to make this a O(1) function
 def findTileByCoordinates(x, y):
-    global board
     for tile in board.tiles:
         if tile.hexFace.x == x and tile.hexFace.y == y:
             return tile
@@ -104,46 +105,36 @@ def findProductionTileByCoordinates(x, y):
     if not hasattr(tile, '_diceProbability'): return 0
     return tile._diceProbability
 
+def findVertexProduction(x, y, z):
+    prod = findProductionTileByCoordinates(x, y)
+    if z == 0:
+        prod += findProductionTileByCoordinates(x, y - 1)
+        prod += findProductionTileByCoordinates(x + 1, y - 1)
+    else:
+        prod += findProductionTileByCoordinates(x - 1, y + 1)
+        prod += findProductionTileByCoordinates(x, y + 1)
+    return prod
+
+def findVertexProductionById(vertex_id):
+    loc = board.vertices[vertex_id].hexCorner
+    return findVertexProduction(loc.x, loc.y, loc.z)
+
 # Loops over all hexcorners to find the highest producing spot
 # where its still possible to build a settlement
 def findHighestProducingSpot():
-    global board
-    x = y = z = 0
     i = high_index = -1
     high_prod = -1
-    for corner in board.vertices:
-        i += 1
+    for i, corner in enumerate(board.vertices):
         if corner.owner != 0 or corner.restrictedStartingPlacement is True: continue
 
-        prod = findProductionTileByCoordinates(corner.hexCorner.x, corner.hexCorner.y)
-        if corner.hexCorner.z == 0:
-            prod += findProductionTileByCoordinates(corner.hexCorner.x, corner.hexCorner.y - 1)
-            prod += findProductionTileByCoordinates(corner.hexCorner.x + 1, corner.hexCorner.y - 1)
-        else:
-            prod += findProductionTileByCoordinates(corner.hexCorner.x - 1, corner.hexCorner.y + 1)
-            prod += findProductionTileByCoordinates(corner.hexCorner.x, corner.hexCorner.y + 1)
+        prod = findVertexProduction(corner.hexCorner.x, corner.hexCorner.y, corner.hexCorner.z)
         if prod > high_prod:
             high_prod = prod
-            x = corner.hexCorner.x
-            y = corner.hexCorner.y
-            z = corner.hexCorner.z
             high_index = i
-
-    # Store coordinates to create road with later, yeahhhhhhh uhhhmmm
-    global last_x
-    global last_y
-    global last_z
-    global own_settlements
-    last_x = x
-    last_y = y
-    last_z = z
-    own_settlements.append(high_index)
-    findNextSettlement()
 
     return high_index
 
 def getRoadIndexByCoordinates(x, y, z):
-    global board
     i = 0
     for edge in board.edges:
         if edge.hexEdge.x == x and edge.hexEdge.y == y and edge.hexEdge.z == z:
@@ -161,17 +152,27 @@ def getRoadNextToSettlement(x, y, z):
     return None
 
 def findNextSettlement():
-    for settlement_index in own_settlements:
-        candidates = findNeighboursByDegree(None, settlement_index, 2)
-        print(candidates)
+    candidates = []
+
+    for settlement_index in board.own_settlements:
+        candidates.append(findNeighboursByDegree(None, settlement_index, 2))
+    
+    high_vertex_index = -1
+    high_prod = -1
+    for vertex_index in candidates:
+        prod = findVertexProductionById(vertex_index)
+        if prod > high_prod:
+            high_vertex_index = vertex_index
+            high_prod = prod
+            
+    return high_vertex_index
+        
 
 def findNeighboursByDegree(prev_vertex_index, vertex_index, degree):
     print("findNeighboursByDegree({0}, {1}, {2})".format(prev_vertex_index, vertex_index, degree))
     if degree <= 0: return vertex_index
 
     neighbours = []
-    global board
-    print("board : {0}".format(board.adjacency_map[vertex_index][0]))
     for entry in board.adjacency_map[vertex_index]:
         vertex = board.vertices[entry["vertex_index"]]
         edge = board.edges[entry["edge_index"]]
@@ -180,11 +181,20 @@ def findNeighboursByDegree(prev_vertex_index, vertex_index, degree):
         
     return neighbours
 
-def buildSettlement(settlementIndex):
-    send({ "action": 1, "data": settlementIndex })
+def buildRoad(road_index):
+    send({ "action": 0, "data": road_index })
 
-def buildRoad(roadIndex):
-    send({ "action": 0, "data": roadIndex })
+def buildSettlement(settlement_index):
+    send({ "action": 1, "data": settlement_index })
+
+def buildCity(settlement_index):
+    send({ "action": 2, "data": settlement_index })
+
+def buyDevCard(settlement_index):
+    send({ "action": 3 })
+
+def throwDice(settlement_index):
+    send({ "action": 4 })
 
 def passTurn():
     send({ "action": 5 })
