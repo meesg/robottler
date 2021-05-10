@@ -34,29 +34,50 @@ async def consumer_handler(websocket, path):
             elif hasattr(data, "currentTurnState"): # Game state information
                 global game_state
                 if data.currentTurnPlayerColor == player_color:
-                    if data.currentActionState == 1 and game_state == GameState.SETUP_SETTLEMENT:
-                        print("Building settlement")
-                        settlement_index = findHighestProducingSpot()
+                    if data.currentTurnState == 0:
+                        if data.currentActionState == 1 and game_state == GameState.SETUP_SETTLEMENT:
+                            print("Building settlement")
+                            settlement_index = findHighestProducingSpot()
 
-                        buildSettlement(settlement_index)
-                        board.own_settlements.append(settlement_index)
-                        
-                        game_state = GameState.SETUP_ROAD
-                    if data.currentActionState == 3 and game_state == GameState.SETUP_ROAD:
-                        print("Building road")
-                        road_index = findNextRoad(board.own_settlements[-1], True)
-                        buildRoad(road_index)
+                            buildSettlement(settlement_index)
+                            board.own_settlements.append(settlement_index)
+                            
+                            game_state = GameState.SETUP_ROAD
+                        if data.currentActionState == 3 and game_state == GameState.SETUP_ROAD:
+                            print("Building road")
+                            road_index = findNextRoad(board.own_settlements[-1], True)
+                            buildRoad(road_index)
 
-                        if len(board.own_settlements) < 2:
-                            game_state = GameState.SETUP_SETTLEMENT
-                        else:
-                            game_state = GameState.EXPANDING
+                            if len(board.own_settlements) < 2:
+                                game_state = GameState.SETUP_SETTLEMENT
+                            else:
+                                game_state = GameState.EXPANDING
+                    if data.currentTurnState == 1:
+                        if data.currentActionState == 0:
+                            throwDice()
                     if data.currentTurnState == 2:
-                        pass
+                        print("My turn!")
+                        next_road = findNextRoad(None, False)
+                        print(next_road)
+                        if next_road != None:
+                            if board.resources[Resources.WOOD] > 0 and board.resources[Resources.BRICK] > 0:
+                                buildRoad(next_road)
+                        # passTurn()
+            elif hasattr(data, "givingPlayer"): # Trades
+                if (data.givingPlayer == player_color):
+                    for card in data.givingCards:
+                        board.resources[Resources(card)] -= 1
+                    for card in data.receivingCards:
+                        board.resources[Resources(card)] += 1
+                if (data.receivingPlayer == player_color):
+                    for card in data.givingCards:
+                        board.resources[Resources(card)] += 1
+                    for card in data.receivingCards:
+                        board.resources[Resources(card)] -= 1
             elif isinstance(data, list) and hasattr(data[0], "hexCorner"): # Settlement update (probably upgrading to a city works the same)
                 addSettlementToBoard(data[0])
             elif isinstance(data, list) and hasattr(data[0], "hexEdge"):
-                pass
+                addRoadToBoard(data[0])
             elif isinstance(data, list) and hasattr(data[0], "owner"): # Cards being handed out
                 for entry in data:
                     print(entry)
@@ -89,6 +110,12 @@ def findCornerByCoordinates(x, y, z):
             return corner
     return None
 
+def findEdgeByCoordinates(x, y, z): 
+    for edge in board.edges:
+        if edge.hexEdge.x == x and edge.hexEdge.y == y and edge.hexEdge.z == z:
+            return edge
+    return None
+
 def restrictCorner(x, y, z):
     corner = findCornerByCoordinates(x, y, z)
     if corner is None: return
@@ -112,6 +139,10 @@ def addSettlementToBoard(newCorner):
         restrictCorner(x - 1, y + 1, 0)
         restrictCorner(x, y + 1, 0)
         restrictCorner(x - 1, y + 2, 0)
+
+def addRoadToBoard(road):
+    edge = findEdgeByCoordinates(road.hexEdge.x, road.hexEdge.y, road.hexEdge.z)
+    edge.owner = road.owner
 
 # TODO: Store tiles in a smarter way to make this a O(1) function
 def findTileByCoordinates(x, y):
@@ -194,8 +225,11 @@ def findNextRoad(settlement_index, is_setup):
             high_vertex_index = vertex_index
             high_prod = prod
             high_path = entry["path"]
-            
-    return high_path[0]
+
+    for edge_index in high_path:
+        if board.edges[edge_index].owner == 0:
+            return edge_index
+    return None
         
 
 def findSettlementSpots(prev_vertex_index, vertex_index, path, degree):
@@ -230,10 +264,10 @@ def buildSettlement(settlement_index):
 def buildCity(settlement_index):
     send({ "action": 2, "data": settlement_index })
 
-def buyDevCard(settlement_index):
+def buyDevCard():
     send({ "action": 3 })
 
-def throwDice(settlement_index):
+def throwDice():
     send({ "action": 4 })
 
 def passTurn():

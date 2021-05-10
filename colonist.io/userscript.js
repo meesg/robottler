@@ -9,8 +9,11 @@ const colonistioActions = Object.freeze({
     THROW_DICE: "15",
     PASS_TURN: "19",
     BUY_DEVELOPMENT_CARD: "21",
+    WANT_BUILD_ROAD: "22",
     BUILD_ROAD: "23",
+    WANT_BUILD_SETTLEMENT: "25",
     BUILD_SETTLEMENT: "26",
+    WANT_BUILD_CITY: "27",
     BUILD_CITY: "28"
 })
 
@@ -127,30 +130,32 @@ window.WebSocket = function (...args) {
 botSocket.onmessage = function (event) {
     const parsedData = JSON.parse(event.data)
 
-    let gameSocketData
     switch (parsedData.action) {
     case 0: // Build road
-        gameSocketData = { id: colonistioActions.BUILD_ROAD, data: parsedData.data } // data: road id
+        sendEncoded({ id: colonistioActions.WANT_BUILD_ROAD, data: true }) // data: road id
+        sendEncoded({ id: colonistioActions.BUILD_ROAD, data: parsedData.data }) // data: road id
         break
     case 1: // Build settlement
-        gameSocketData = { id: colonistioActions.BUILD_SETTLEMENT, data: parsedData.data } // data: settlement id
+        sendEncoded({ id: colonistioActions.WANT_BUILD_SETTLEMENT, data: true }) // data: road id
+        sendEncoded({ id: colonistioActions.BUILD_SETTLEMENT, data: parsedData.data }) // data: settlement id
         break
     case 2: // Build city
-        gameSocketData = { id: colonistioActions.BUILD_CITY, data: parsedData.data } // data: settlement id
+        sendEncoded({ id: colonistioActions.WANT_BUILD_CITY, data: true }) // data: road id
+        sendEncoded({ id: colonistioActions.BUILD_CITY, data: parsedData.data }) // data: settlement id
         break
     case 3: // Buy development card
-        gameSocketData = { id: colonistioActions.BUY_DEVELOPMENT_CARD, data: true }
+        sendEncoded({ id: colonistioActions.BUY_DEVELOPMENT_CARD, data: true })
         break
     case 4: // Throw dice
-        gameSocketData = { id: colonistioActions.THROW_DICE, data: true }
+        sendEncoded({ id: colonistioActions.THROW_DICE, data: true })
         break
     case 5: // Pass turn
-        gameSocketData = { id: colonistioActions.PASS_TURN, data: true }
+        sendEncoded({ id: colonistioActions.PASS_TURN, data: true })
         break
-    default:
-        return
     }
+}
 
-    const encodedData = EncoderModule.getInstance().encode(gameSocketData)
+function sendEncoded (data) {
+    const encodedData = EncoderModule.getInstance().encode(data)
     gameSocket.send(encodedData)
 }
