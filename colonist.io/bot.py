@@ -1,5 +1,6 @@
 from aioconsole import ainput
 from types import SimpleNamespace
+from enum import Enum
 import asyncio
 import json
 import pathlib
@@ -12,7 +13,13 @@ from board import Board
 player_color = 1 # TODO: find a way to find this procedurally in ingame lobbies, in standard bot games this works because you're always red (=1)
 board = None
 queue = None
-turn_started = False
+
+class GameState(Enum):
+    SETUP_SETTLEMENT = 0
+    SETUP_ROAD = 1
+    NORMAL_TURN = 2
+
+game_state = GameState.SETUP_SETTLEMENT
 
 async def consumer_handler(websocket, path):
     async for message in websocket:
@@ -22,26 +29,31 @@ async def consumer_handler(websocket, path):
                 global board
                 board = Board(data)
             elif hasattr(data, "currentTurnState"): # Game state information
-                global turn_started
-                if data.currentTurnPlayerColor == player_color and data.currentActionState == 1 and not turn_started:
-                    print("Settlement time")
-                    turn_started = True
+                global game_state
+                if data.currentTurnPlayerColor == player_color and data.currentActionState == 1 and game_state == GameState.SETUP_SETTLEMENT:
+                    print("Building settlement")
                     settlement_index = findHighestProducingSpot()
 
                     buildSettlement(settlement_index)
                     board.own_settlements.append(settlement_index)
-                    print(board.own_settlements)
-                if data.currentTurnPlayerColor == player_color and data.currentActionState == 3:
-                    print("Road time")
+                    
+                    game_state = GameState.SETUP_ROAD
+                if data.currentTurnPlayerColor == player_color and data.currentActionState == 3 and game_state == GameState.SETUP_ROAD:
+                    print("Building road")
                     x = board.vertices[board.own_settlements[-1]].hexCorner.x
                     y = board.vertices[board.own_settlements[-1]].hexCorner.y
                     z = board.vertices[board.own_settlements[-1]].hexCorner.z
                     road_index = getRoadNextToSettlement(x, y, z)
                     buildRoad(road_index)
-                if data.currentTurnPlayerColor != player_color:
-                    turn_started = False # TODO: fix end turn check, this doesn't work when bot is last to place first settlement
+
+                    if len(board.own_settlements) < 2:
+                        game_state = GameState.SETUP_SETTLEMENT
+                    else:
+                        game_state = GameState.NORMAL_TURN
             elif isinstance(data, list) and hasattr(data[0], "hexCorner"): # Settlement update (probably upgrading to a city works the same)
                 addSettlementToBoard(data[0])
+            elif isinstance(data, list) and hasattr(data[0], "hexEdge"):
+                pass
         except:
             pass
 
