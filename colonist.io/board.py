@@ -1,8 +1,18 @@
+from resources import Resources
+
 class Board:
     tiles = None
     vertices = None
     edges = None
 
+    resources = {
+        Resources.WOOD: 0,
+        Resources.BRICK: 0,
+        Resources.WHEAT: 0,
+        Resources.SHEEP: 0,
+        Resources.ORE: 0
+    }
+    
     own_settlements = []
     adjacency_map = []
     vertex_tiles = []

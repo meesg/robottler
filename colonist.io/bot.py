@@ -9,6 +9,7 @@ import sys
 import websockets
 
 from board import Board
+from resources import Resources
 
 player_color = 1 # TODO: find a way to find this procedurally in ingame lobbies, in standard bot games this works because you're always red (=1)
 board = None
@@ -17,7 +18,9 @@ queue = None
 class GameState(Enum):
     SETUP_SETTLEMENT = 0
     SETUP_ROAD = 1
-    NORMAL_TURN = 2
+    EXPANDING = 2
+    CITIES = 3
+    DEV_CARDS = 4
 
 game_state = GameState.SETUP_SETTLEMENT
 
@@ -41,18 +44,24 @@ async def consumer_handler(websocket, path):
                         game_state = GameState.SETUP_ROAD
                     if data.currentActionState == 3 and game_state == GameState.SETUP_ROAD:
                         print("Building road")
-                        road_index = findNextRoad(board.own_settlements[-1])
+                        road_index = findNextRoad(board.own_settlements[-1], True)
                         buildRoad(road_index)
 
                         if len(board.own_settlements) < 2:
                             game_state = GameState.SETUP_SETTLEMENT
                         else:
-                            game_state = GameState.NORMAL_TURN
+                            game_state = GameState.EXPANDING
                     if data.currentTurnState == 2:
                         pass
             elif isinstance(data, list) and hasattr(data[0], "hexCorner"): # Settlement update (probably upgrading to a city works the same)
                 addSettlementToBoard(data[0])
             elif isinstance(data, list) and hasattr(data[0], "hexEdge"):
+                pass
+            elif isinstance(data, list) and hasattr(data[0], "owner"): # Cards being handed out
+                for entry in data:
+                    print(entry)
+                    if entry.owner == player_color: 
+                        board.resources[Resources(entry.card)] += 1 # TODO: fix for cities, probably can just increment with distribitionType
                 pass
         except:
             pass
@@ -165,7 +174,7 @@ def getRoadNextToSettlement(x, y, z):
         return getRoadIndexByCoordinates(x, y, 2)
     return None
 
-def findNextRoad(settlement_index):
+def findNextRoad(settlement_index, is_setup):
     candidates = []
 
     if settlement_index == None:
@@ -181,7 +190,7 @@ def findNextRoad(settlement_index):
         vertex_index = entry["vertex_index"]
 
         prod = findVertexProductionById(vertex_index)
-        if prod > high_prod:
+        if prod > high_prod and (not is_setup or prod <= 7):
             high_vertex_index = vertex_index
             high_prod = prod
             high_path = entry["path"]
