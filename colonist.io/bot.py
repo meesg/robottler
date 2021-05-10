@@ -29,8 +29,8 @@ async def consumer_handler(websocket, path):
                     settlement_index = findHighestProducingSpot()
 
                     buildSettlement(settlement_index)
-                    global board
                     board.own_settlements.append(settlement_index)
+                    print(board.own_settlements)
                 if data.currentTurnPlayerColor == player_color and data.currentActionState == 3:
                     print("Road time")
                     x = board.vertices[board.own_settlements[-1]].hexCorner.x

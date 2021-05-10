@@ -5,6 +5,7 @@ class Board:
 
     own_settlements = []
     adjacency_map = []
+    vertex_tiles = []
 
     def __init__(self, board):
         self.tiles = board.tileState.tiles
@@ -20,8 +21,31 @@ class Board:
             z = vertex.hexCorner.z 
             
             # TODO: clean up lambda, maybe use a function instead
-            data = map(lambda edge_index: { "edge_index": edge_index, "vertex_index": self.getOtherVertexNextToEdge(self.edges[edge_index], vertex) }, self.getEdgesNextToVertex(x, y, z))
+            data = map(lambda edge_index: { 
+                "edge_index": edge_index, 
+                "vertex_index": self.getOtherVertexNextToEdge(self.edges[edge_index], vertex) }
+                , self.getEdgesNextToVertex(x, y, z))
             self.adjacency_map.append(list(data))
+
+            self.buildVertexTiles()
+
+    def buildVertexTiles(self):
+        for vertex in self.vertices:
+            loc = vertex.hexCorner
+
+            tiles = []
+
+            tiles.append(self.findTileByCoordinates(loc.x, loc.y))
+            if loc.z == 0:
+                tiles.append(self.findTileByCoordinates(loc.x, loc.y - 1))
+                tiles.append(self.findTileByCoordinates(loc.x + 1, loc.y - 1))
+            else:
+                tiles.append(self.findTileByCoordinates(loc.x - 1, loc.y + 1))
+                tiles.append(self.findTileByCoordinates(loc.x, loc.y + 1))
+
+            tiles = [x for x in tiles if x is not None]
+                        
+            self.vertex_tiles.append(tiles)
 
     def getEdgeIndexByCoordinates(self, x, y, z):
         i = 0
@@ -77,4 +101,11 @@ class Board:
         for index in vertices:
             if self.vertices[index] != vertex:
                 return index
+        return None
+
+    # TODO: Store tiles in a smarter way to make this a O(1) function
+    def findTileByCoordinates(self, x, y):
+        for tile in self.tiles:
+            if tile.hexFace.x == x and tile.hexFace.y == y:
+                return tile
         return None
