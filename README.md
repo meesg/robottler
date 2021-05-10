@@ -12,5 +12,18 @@
 
 ### Expanding settlements
  - [x] Check highest producing expansion spot with 2 roads between
- - [x] Point intitial settlement road towards this spot already
- - [ ] Build towards spot if possible
+ - [x] Point intitial settlement road towards this vertex
+ - [ ] Build roads towards vertex
+ - [ ] When all the roads are build, build settlement
+
+### Cities
+ - [ ] Upgrade 2 highest producing settlements to cities
+
+### Dev cards
+ - [ ] Buy dev cards
+ - [ ] Play knight cards whenever possible
+
+### Trading
+ - [ ] Create function which checks for beneficial trades
+ - [ ] On opponent turn accept trade if it is beneficial
+ - [ ] On own turn post all beneficial trades
