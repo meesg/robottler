@@ -11,6 +11,6 @@
  - [x] Place road (random is fine for now)
 
 ### Expanding settlements
- - [ ] Check highest producing expansion spot with 2 roads between
- - [ ] Point intitial settlement road towards this spot already
+ - [x] Check highest producing expansion spot with 2 roads between
+ - [x] Point intitial settlement road towards this spot already
  - [ ] Build towards spot if possible
