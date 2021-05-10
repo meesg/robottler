@@ -30,26 +30,26 @@ async def consumer_handler(websocket, path):
                 board = Board(data)
             elif hasattr(data, "currentTurnState"): # Game state information
                 global game_state
-                if data.currentTurnPlayerColor == player_color and data.currentActionState == 1 and game_state == GameState.SETUP_SETTLEMENT:
-                    print("Building settlement")
-                    settlement_index = findHighestProducingSpot()
+                if data.currentTurnPlayerColor == player_color:
+                    if data.currentActionState == 1 and game_state == GameState.SETUP_SETTLEMENT:
+                        print("Building settlement")
+                        settlement_index = findHighestProducingSpot()
 
-                    buildSettlement(settlement_index)
-                    board.own_settlements.append(settlement_index)
-                    
-                    game_state = GameState.SETUP_ROAD
-                if data.currentTurnPlayerColor == player_color and data.currentActionState == 3 and game_state == GameState.SETUP_ROAD:
-                    print("Building road")
-                    x = board.vertices[board.own_settlements[-1]].hexCorner.x
-                    y = board.vertices[board.own_settlements[-1]].hexCorner.y
-                    z = board.vertices[board.own_settlements[-1]].hexCorner.z
-                    road_index = getRoadNextToSettlement(x, y, z)
-                    buildRoad(road_index)
+                        buildSettlement(settlement_index)
+                        board.own_settlements.append(settlement_index)
+                        
+                        game_state = GameState.SETUP_ROAD
+                    if data.currentActionState == 3 and game_state == GameState.SETUP_ROAD:
+                        print("Building road")
+                        road_index = findNextRoad(board.own_settlements[-1])
+                        buildRoad(road_index)
 
-                    if len(board.own_settlements) < 2:
-                        game_state = GameState.SETUP_SETTLEMENT
-                    else:
-                        game_state = GameState.NORMAL_TURN
+                        if len(board.own_settlements) < 2:
+                            game_state = GameState.SETUP_SETTLEMENT
+                        else:
+                            game_state = GameState.NORMAL_TURN
+                    if data.currentTurnState == 2:
+                        pass
             elif isinstance(data, list) and hasattr(data[0], "hexCorner"): # Settlement update (probably upgrading to a city works the same)
                 addSettlementToBoard(data[0])
             elif isinstance(data, list) and hasattr(data[0], "hexEdge"):
@@ -118,6 +118,7 @@ def findProductionTileByCoordinates(x, y):
     return tile._diceProbability
 
 def findVertexProduction(x, y, z):
+    # print("findVertexProduction({0}, {1}, {2})".format(x, y, z))
     prod = findProductionTileByCoordinates(x, y)
     if z == 0:
         prod += findProductionTileByCoordinates(x, y - 1)
@@ -128,6 +129,7 @@ def findVertexProduction(x, y, z):
     return prod
 
 def findVertexProductionById(vertex_id):
+    # print("findVertexProductionById({0})".format(vertex_id))
     loc = board.vertices[vertex_id].hexCorner
     return findVertexProduction(loc.x, loc.y, loc.z)
 
@@ -163,35 +165,52 @@ def getRoadNextToSettlement(x, y, z):
         return getRoadIndexByCoordinates(x, y, 2)
     return None
 
-def findNextSettlement():
+def findNextRoad(settlement_index):
     candidates = []
 
-    for settlement_index in board.own_settlements:
-        candidates.append(findNeighboursByDegree(None, settlement_index, 2))
-    
+    if settlement_index == None:
+        for index in board.own_settlements:
+            candidates.extend(findSettlementSpots(None, index, [], 2))
+    else:
+        candidates.extend(findSettlementSpots(None, settlement_index, [], 2))
+
     high_vertex_index = -1
     high_prod = -1
-    for vertex_index in candidates:
+    high_path = None
+    for entry in candidates:
+        vertex_index = entry["vertex_index"]
+
         prod = findVertexProductionById(vertex_index)
         if prod > high_prod:
             high_vertex_index = vertex_index
             high_prod = prod
+            high_path = entry["path"]
             
-    return high_vertex_index
+    return high_path[0]
         
 
-def findNeighboursByDegree(prev_vertex_index, vertex_index, degree):
-    print("findNeighboursByDegree({0}, {1}, {2})".format(prev_vertex_index, vertex_index, degree))
-    if degree <= 0: return vertex_index
+def findSettlementSpots(prev_vertex_index, vertex_index, path, degree):
+    # print("findSettlementSpots({0}, {1}, {2}, {3})".format(prev_vertex_index, vertex_index, path, degree))
+    if degree <= 0: 
+        vert = board.vertices[vertex_index]
+        if vert.owner == 0 and not vert.restrictedStartingPlacement:
+            return [{ "vertex_index": vertex_index, "path": path }]
+        else:
+            return []
 
-    neighbours = []
+    candidates = []
     for entry in board.adjacency_map[vertex_index]:
         vertex = board.vertices[entry["vertex_index"]]
         edge = board.edges[entry["edge_index"]]
-        if prev_vertex_index != entry["vertex_index"] and vertex.owner == 0 and edge.owner == 0:
-            neighbours.append(findNeighboursByDegree(vertex_index, entry["vertex_index"], degree - 1))
-        
-    return neighbours
+        if prev_vertex_index != entry["vertex_index"] and \
+           (vertex.owner == 0 or vertex.owner == player_color) and \
+           (edge.owner == 0 or edge.owner == player_color):
+            new_path = []
+            new_path.extend(path)
+            new_path.append((entry["edge_index"]))
+            candidates.extend(findSettlementSpots(vertex_index, entry["vertex_index"], new_path, degree - 1))
+    
+    return candidates
 
 def buildRoad(road_index):
     send({ "action": 0, "data": road_index })
