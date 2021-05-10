@@ -13,7 +13,7 @@
 ### Expanding settlements
  - [x] Check highest producing expansion spot with 2 roads between
  - [x] Point intitial settlement road towards this vertex
- - [ ] Build roads towards vertex
+ - [x] Build roads towards vertex
  - [ ] When all the roads are build, build settlement
 
 ### Cities
