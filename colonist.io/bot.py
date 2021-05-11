@@ -1,22 +1,21 @@
-from aioconsole import ainput
 from enum import Enum
 from types import SimpleNamespace
 import asyncio
 import copy
 import json
-import pathlib
-import ssl
-import sys
 import websockets
 
 from board import Board
 from resources import Resources
 
-player_color = 1 # TODO: find a way to find this procedurally in ingame lobbies, in standard bot games this works because you're always red (=1)
-board = None
-queue = None
+# TODO: find a way to find this procedurally in ingame lobbies,
+# in standard bot games this works because you're always red (=1)
+PLAYER_COLOR = 1
+BOARD = None
+QUEUE = None
 
-next_settlement = None # TODO: clean
+NEXT_SETTLEMENT = None  # TODO: clean
+
 
 class GameState(Enum):
     SETUP_SETTLEMENT = 0
@@ -25,111 +24,129 @@ class GameState(Enum):
     CITIES = 3
     DEV_CARDS = 4
 
-road_cards = { Resources.WOOD: 1, Resources.BRICK: 1 }
-settlement_cards = { Resources.WOOD: 1, Resources.BRICK: 1, Resources.SHEEP: 1, Resources.WHEAT: 1 }
-city_cards = { Resources.WHEAT: 2, Resources.ORE: 3 }
-dev_card_cards = { Resources.SHEEP: 1, Resources.WHEAT: 1, Resources.ORE: 1 }
 
-game_state = GameState.SETUP_SETTLEMENT
+road_cards = {Resources.WOOD: 1, Resources.BRICK: 1}
+settlement_cards = {Resources.WOOD: 1, Resources.BRICK: 1,
+                    Resources.SHEEP: 1, Resources.WHEAT: 1}
+city_cards = {Resources.WHEAT: 2, Resources.ORE: 3}
+dev_card_cards = {Resources.SHEEP: 1, Resources.WHEAT: 1, Resources.ORE: 1}
+
+GAME_STATE = GameState.SETUP_SETTLEMENT
+
 
 async def consumer_handler(websocket, path):
     async for message in websocket:
         try:
-            data = json.loads(message, object_hook=lambda d: SimpleNamespace(**d))
-            if hasattr(data, "tileState"): # Board information
-                global board
-                board = Board(data)
-            elif hasattr(data, "currentTurnState"): # Game state information
-                global game_state
+            data = json.loads(
+                message, object_hook=lambda d: SimpleNamespace(**d))
+            if hasattr(data, "tileState"):  # Board information
+                global BOARD
+                BOARD = Board(data)
+            elif hasattr(data, "currentTurnState"):  # Game state information
+                global GAME_STATE
 
-                if data.currentTurnPlayerColor == player_color:
-                    # need to be outside the currentTurnState ifs, because it can happen in both turnstate 1 and 2
+                if data.currentTurnPlayerColor == PLAYER_COLOR:
+                    # need to be outside the currentTurnState ifs,
+                    # because it can happen in both turnstate 1 and 2
                     if data.currentActionState == 22:
                         print("We have to place robber!")
-                        new_robber_tile_index = findNewRobberTile()
-                        print("New robber tile index : {0}".format(new_robber_tile_index))
-                        moveRobber(new_robber_tile_index)
+                        new_robber_tile_index = find_new_robber_tile()
+                        print("New robber tile index : {0}".format(
+                            new_robber_tile_index))
+                        move_robber(new_robber_tile_index)
                     if data.currentTurnState == 0:
-                        if data.currentActionState == 1 and game_state == GameState.SETUP_SETTLEMENT:
+                        if data.currentActionState == 1 and \
+                           GAME_STATE == GameState.SETUP_SETTLEMENT:
                             print("Building settlement")
-                            settlement_index = findHighestProducingSpot()
+                            settlement_index = find_highest_producing_vertex()
 
-                            buildSettlement(settlement_index)
-                            board.own_settlements.append(settlement_index)
-                            
-                            game_state = GameState.SETUP_ROAD
-                        if data.currentActionState == 3 and game_state == GameState.SETUP_ROAD:
+                            build_settlement(settlement_index)
+                            BOARD.own_settlements.append(settlement_index)
+
+                            GAME_STATE = GameState.SETUP_ROAD
+                        if data.currentActionState == 3 and GAME_STATE == GameState.SETUP_ROAD:
                             print("Building road")
-                            road_index = findNextRoad(board.own_settlements[-1], True)
-                            buildRoad(road_index)
+                            road_index = find_next_road(
+                                BOARD.own_settlements[-1], True)
+                            build_road(road_index)
 
-                            if len(board.own_settlements) < 2:
-                                game_state = GameState.SETUP_SETTLEMENT
+                            if len(BOARD.own_settlements) < 2:
+                                GAME_STATE = GameState.SETUP_SETTLEMENT
                             else:
-                                game_state = GameState.EXPANDING
+                                GAME_STATE = GameState.EXPANDING
                     if data.currentTurnState == 1:
                         if data.currentActionState == 0:
-                            throwDice()
+                            throw_dice()
                     if data.currentTurnState == 2:
-                        next_road = findNextRoad(None, False)
-                        if next_road != None:
-                            if distanceFromCards(road_cards, board.resources) == 0:
-                                buildRoad(next_road)
-                        elif distanceFromCards(settlement_cards, board.resources) == 0:
-                            buildSettlement(next_settlement)
-                        passTurn()
-            elif hasattr(data, "allowableActionState"): # TODO: remember the player next to tile we place robber on so we can do the logic on the turn logic package
+                        next_road = find_next_road(None, False)
+                        if next_road is not None:
+                            if distance_from_cards(road_cards, BOARD.resources) == 0:
+                                build_road(next_road)
+                        elif distance_from_cards(settlement_cards, BOARD.resources) == 0:
+                            build_settlement(NEXT_SETTLEMENT)
+                        pass_turn()
+            # TODO: remember the player next to tile we place robber on
+            # so we can do the logic on the turn logic package
+            elif hasattr(data, "allowableActionState"):
                 if data.allowableActionState == 23:
                     print("stealing time")
-                    robPlayer(data.playersToSelect[0])
+                    rob_player(data.playersToSelect[0])
             elif hasattr(data, "selectCardFormat"):
-                    print("disarding time")
-                    cards = pickCardsToDiscard(data.selectCardFormat.amountOfCardsToSelect)
-                    discardCards(cards)              
-            elif hasattr(data, "givingPlayer"): # Trade information
-                if (data.givingPlayer == player_color):
+                print("disarding time")
+                cards = pick_cards_to_discard(
+                    data.selectCardFormat.amountOfCardsToSelect)
+                discard_cards(cards)
+            elif hasattr(data, "givingPlayer"):  # Trade information
+                if data.givingPlayer == PLAYER_COLOR:
                     for card in data.givingCards:
-                        board.resources[Resources(card)] -= 1
+                        BOARD.resources[Resources(card)] -= 1
                     for card in data.receivingCards:
-                        board.resources[Resources(card)] += 1
-                if (data.receivingPlayer == player_color):
+                        BOARD.resources[Resources(card)] += 1
+                if data.receivingPlayer == PLAYER_COLOR:
                     for card in data.givingCards:
-                        board.resources[Resources(card)] += 1
+                        BOARD.resources[Resources(card)] += 1
                     for card in data.receivingCards:
-                        board.resources[Resources(card)] -= 1
-            elif hasattr(data, "offeredResources"): # Active trade offer
+                        BOARD.resources[Resources(card)] -= 1
+            elif hasattr(data, "offeredResources"):  # Active trade offer
                 # Check if we're allowed to take this trade and have to respond
                 for player_actions in data.actions:
-                    if player_actions.player == player_color:
+                    if player_actions.player == PLAYER_COLOR:
                         if len(player_actions.allowedTradeActions) > 0:
                             break
                         else:
                             return
                 # Respond to trade offer
-                if (isFavourableTrade(data)):
-                    acceptTrade(data.id)
+                if is_favourable_trade(data):
+                    accept_trade(data.id)
                 else:
-                    rejectTrade(data.id)
-            elif isinstance(data, list) and hasattr(data[0], "hexCorner"): # Settlement update (probably upgrading to a city works the same)
-                addSettlementToBoard(data[0])
+                    reject_trade(data.id)
+            # Settlement update (probably upgrading to a city works the same)
+            elif isinstance(data, list) and hasattr(data[0], "hexCorner"):
+                update_vertex(data[0])
             elif isinstance(data, list) and hasattr(data[0], "hexEdge"):
-                addRoadToBoard(data[0])
-            elif isinstance(data, list) and hasattr(data[0], "owner"): # Cards being handed out
+                update_edge(data[0])
+            # Cards being handed out
+            elif isinstance(data, list) and hasattr(data[0], "owner"):
                 for entry in data:
-                    if entry.owner == player_color: 
-                        board.resources[Resources(entry.card)] += 1 # TODO: fix for cities, probably can just increment with distribitionType
-            elif isinstance(data, list) and hasattr(data[0], "tilePieceTypes"): # Robber move information
+                    if entry.owner == PLAYER_COLOR:
+                        # TODO: fix for cities, probably can just increment with distribitionType
+                        BOARD.resources[Resources(entry.card)] += 1
+            # Robber move information
+            elif isinstance(data, list) and hasattr(data[0], "tilePieceTypes"):
                 new_robber_tile = data[1]
                 loc = new_robber_tile.hexFace
-                board.robber_tile = board.findTileIndexByCoordinates(loc.x, loc.y)
-                print("New robber_tile: {0}".format(board.robber_tile))
+                BOARD.robber_tile = BOARD.find_tile_index_by_coordinates(
+                    loc.x, loc.y)
+                print("New robber_tile: {0}".format(BOARD.robber_tile))
         except:
             pass
 
+
 async def producer_handler(websocket, path):
     while True:
-        message = await queue.get()
+        message = await QUEUE.get()
         await websocket.send(message)
+
 
 async def handler(websocket, path):
     consumer_task = asyncio.ensure_future(
@@ -143,96 +160,106 @@ async def handler(websocket, path):
     for task in pending:
         task.cancel()
 
-def findCornerByCoordinates(x, y, z): 
-    for corner in board.vertices:
+
+def find_vertex_by_coordinates(x, y, z):
+    for corner in BOARD.vertices:
         if corner.hexCorner.x == x and corner.hexCorner.y == y and corner.hexCorner.z == z:
             return corner
     return None
 
-def findEdgeByCoordinates(x, y, z): 
-    for edge in board.edges:
+
+def find_edge_by_coordinates(x, y, z):
+    for edge in BOARD.edges:
         if edge.hexEdge.x == x and edge.hexEdge.y == y and edge.hexEdge.z == z:
             return edge
     return None
 
-def restrictCorner(x, y, z):
-    corner = findCornerByCoordinates(x, y, z)
-    if corner is None: return
-    print("Restricting: ({x}, {y}, {z})".format(x=x, y=y, z=z))
-    corner.restrictedStartingPlacement = True
 
-def addSettlementToBoard(newCorner):
-    x = newCorner.hexCorner.x
-    y = newCorner.hexCorner.y
-    z = newCorner.hexCorner.z
-    print("Adding settlement: ({x}, {y}, {z})".format(x=x, y=y, z=z))
-    corner = findCornerByCoordinates(x, y, z)
-    
-    if corner is None: raise ValueError("Given coordinates don't exist on the board.")
-    
-    corner.owner = newCorner.owner
-    corner.buildingType = newCorner.buildingType
-    
-    if z == 0:
-        restrictCorner(x, y - 1, 1)
-        restrictCorner(x + 1, y - 1, 1)
-        restrictCorner(x + 1, y - 2, 1)
-    else:
-        restrictCorner(x - 1, y + 1, 0)
-        restrictCorner(x, y + 1, 0)
-        restrictCorner(x - 1, y + 2, 0)
+def update_vertex(new_vertex_info):
+    loc = new_vertex_info.hexCorner
+    vertex_index = BOARD.find_vertex_index_by_coordinates(loc.x, loc.y, loc.z)
+    board_vertex = find_vertex_by_coordinates(loc.x, loc.y, loc.z)
 
-def addRoadToBoard(road):
-    edge = findEdgeByCoordinates(road.hexEdge.x, road.hexEdge.y, road.hexEdge.z)
+    if board_vertex is None:
+        raise ValueError("Given coordinates don't exist on the board.")
+
+    board_vertex.owner = new_vertex_info.owner
+    board_vertex.buildingType = new_vertex_info.buildingType
+
+    if board_vertex.owner == 1:
+        tiles = BOARD.vertex_tiles[vertex_index]
+        for tile in tiles:
+            BOARD.own_production[tile.tileType] += tile._diceProbability
+
+    neighbours = BOARD.adjacency_map[vertex_index]
+    for neighbour in neighbours:
+        BOARD.vertices[neighbour].restrictedStartingPlacement = True
+
+
+def update_edge(road):
+    edge = find_edge_by_coordinates(
+        road.hexEdge.x, road.hexEdge.y, road.hexEdge.z)
     edge.owner = road.owner
 
 # TODO: Store tiles in a smarter way to make this a O(1) function
-def findTileByCoordinates(x, y):
-    for tile in board.tiles:
+
+
+def find_tile_by_coordinates(x, y):
+    for tile in BOARD.tiles:
         if tile.hexFace.x == x and tile.hexFace.y == y:
             return tile
     return None
 
-def findProductionTileByCoordinates(x, y):
-    tile = findTileByCoordinates(x, y)
-    if tile is None: return 0
-    if not hasattr(tile, '_diceProbability'): return 0
+
+def find_production_tile_by_coordinates(x, y):
+    tile = find_tile_by_coordinates(x, y)
+    if tile is None:
+        return 0
+    if not hasattr(tile, '_diceProbability'):
+        return 0
     return tile._diceProbability
 
-def findVertexProduction(x, y, z):
+
+def find_vertex_production(x, y, z):
     # print("findVertexProduction({0}, {1}, {2})".format(x, y, z))
-    prod = findProductionTileByCoordinates(x, y)
+    prod = find_production_tile_by_coordinates(x, y)
     if z == 0:
-        prod += findProductionTileByCoordinates(x, y - 1)
-        prod += findProductionTileByCoordinates(x + 1, y - 1)
+        prod += find_production_tile_by_coordinates(x, y - 1)
+        prod += find_production_tile_by_coordinates(x + 1, y - 1)
     else:
-        prod += findProductionTileByCoordinates(x - 1, y + 1)
-        prod += findProductionTileByCoordinates(x, y + 1)
+        prod += find_production_tile_by_coordinates(x - 1, y + 1)
+        prod += find_production_tile_by_coordinates(x, y + 1)
     return prod
 
-def findVertexProductionById(vertex_id):
+
+def find_vertex_production_by_id(vertex_id):
     # print("findVertexProductionById({0})".format(vertex_id))
-    loc = board.vertices[vertex_id].hexCorner
-    return findVertexProduction(loc.x, loc.y, loc.z)
+    loc = BOARD.vertices[vertex_id].hexCorner
+    return find_vertex_production(loc.x, loc.y, loc.z)
 
 # Loops over all hexcorners to find the highest producing spot
 # where its still possible to build a settlement
-def findHighestProducingSpot():
+
+
+def find_highest_producing_vertex():
     i = high_index = -1
     high_prod = -1
-    for i, corner in enumerate(board.vertices):
-        if corner.owner != 0 or corner.restrictedStartingPlacement is True: continue
+    for i, corner in enumerate(BOARD.vertices):
+        if corner.owner != 0 or corner.restrictedStartingPlacement is True:
+            continue
 
-        prod = findVertexProduction(corner.hexCorner.x, corner.hexCorner.y, corner.hexCorner.z)
+        prod = find_vertex_production(
+            corner.hexCorner.x, corner.hexCorner.y, corner.hexCorner.z)
         if prod > high_prod:
             high_prod = prod
             high_index = i
 
     return high_index
 
-def getRoadIndexByCoordinates(x, y, z):
+
+def get_road_index_by_coordinates(x, y, z):
     i = 0
-    for edge in board.edges:
+    for edge in BOARD.edges:
         if edge.hexEdge.x == x and edge.hexEdge.y == y and edge.hexEdge.z == z:
             return i
         i += 1
@@ -240,21 +267,24 @@ def getRoadIndexByCoordinates(x, y, z):
 
 # x, y, z: settlement coordinates
 # returns road index
-def getRoadNextToSettlement(x, y, z):
+
+
+def get_road_next_to_settlement(x, y, z):
     if z == 0:
-        return getRoadIndexByCoordinates(x, y, 0)
+        return get_road_index_by_coordinates(x, y, 0)
     if z == 1:
-        return getRoadIndexByCoordinates(x, y, 2)
+        return get_road_index_by_coordinates(x, y, 2)
     return None
 
-def findNextRoad(settlement_index, is_setup):
+
+def find_next_road(settlement_index, is_setup):
     candidates = []
 
-    if settlement_index == None:
-        for index in board.own_settlements:
-            candidates.extend(findSettlementSpots(None, index, [], 2))
+    if settlement_index is None:
+        for index in BOARD.own_settlements:
+            candidates.extend(find_settlement_spots(None, index, [], 2))
     else:
-        candidates.extend(findSettlementSpots(None, settlement_index, [], 2))
+        candidates.extend(find_settlement_spots(None, settlement_index, [], 2))
 
     high_vertex_index = -1
     high_prod = -1
@@ -262,129 +292,124 @@ def findNextRoad(settlement_index, is_setup):
     for entry in candidates:
         vertex_index = entry["vertex_index"]
 
-        prod = findVertexProductionById(vertex_index)
+        prod = find_vertex_production_by_id(vertex_index)
         if prod > high_prod and (not is_setup or prod <= 7):
             high_vertex_index = vertex_index
             high_prod = prod
             high_path = entry["path"]
 
-    global next_settlement
-    next_settlement = high_vertex_index
+    global NEXT_SETTLEMENT
+    NEXT_SETTLEMENT = high_vertex_index
     for edge_index in high_path:
-        if board.edges[edge_index].owner == 0:
+        if BOARD.edges[edge_index].owner == 0:
             return edge_index
     return None
-        
 
-def findSettlementSpots(prev_vertex_index, vertex_index, path, degree):
-    # print("findSettlementSpots({0}, {1}, {2}, {3})".format(prev_vertex_index, vertex_index, path, degree))
-    if degree <= 0: 
-        vert = board.vertices[vertex_index]
+
+def find_settlement_spots(prev_vertex_index, vertex_index, path, degree):
+    if degree <= 0:
+        vert = BOARD.vertices[vertex_index]
         if vert.owner == 0 and not vert.restrictedStartingPlacement:
-            return [{ "vertex_index": vertex_index, "path": path }]
+            return [{"vertex_index": vertex_index, "path": path}]
         else:
             return []
 
     candidates = []
-    for entry in board.adjacency_map[vertex_index]:
-        vertex = board.vertices[entry["vertex_index"]]
-        edge = board.edges[entry["edge_index"]]
+    for entry in BOARD.adjacency_map[vertex_index]:
+        vertex = BOARD.vertices[entry["vertex_index"]]
+        edge = BOARD.edges[entry["edge_index"]]
         if prev_vertex_index != entry["vertex_index"] and \
-           (vertex.owner == 0 or vertex.owner == player_color) and \
-           (edge.owner == 0 or edge.owner == player_color):
+           (vertex.owner == 0 or vertex.owner == PLAYER_COLOR) and \
+           (edge.owner == 0 or edge.owner == PLAYER_COLOR):
             new_path = []
             new_path.extend(path)
             new_path.append((entry["edge_index"]))
-            candidates.extend(findSettlementSpots(vertex_index, entry["vertex_index"], new_path, degree - 1))
-    
+            candidates.extend(find_settlement_spots(
+                vertex_index, entry["vertex_index"], new_path, degree - 1))
+
     return candidates
 
-def distanceFromCards(needed, cards):
+
+def distance_from_cards(needed, cards):
     dist = 0
     for resource, amount in needed.items():
         dist += max(0, amount - cards[resource])
     return dist
 
-def distanceFromObjective(cards):
-    if game_state == GameState.EXPANDING:
-        if findNextRoad(None, False) != None:
-            return distanceFromCards(road_cards, cards)
-        else:
-            return distanceFromCards(settlement_cards, cards)
-    if game_state == GameState.CITIES:
-        return distanceFromCards(city_cards, cards)
-    if game_state == GameState.DEV_CARDS:
-        return distanceFromCards(dev_card_cards, cards)
 
-def isFavourableTrade(data):
-    resources_after_trade = copy.deepcopy(board.resources)
+def distance_from_objective(cards):
+    if GAME_STATE == GameState.EXPANDING:
+        if find_next_road(None, False) is not None:
+            return distance_from_cards(road_cards, cards)
+        else:
+            return distance_from_cards(settlement_cards, cards)
+    if GAME_STATE == GameState.CITIES:
+        return distance_from_cards(city_cards, cards)
+    if GAME_STATE == GameState.DEV_CARDS:
+        return distance_from_cards(dev_card_cards, cards)
+
+
+def is_favourable_trade(data):
+    resources_after_trade = copy.deepcopy(BOARD.resources)
     for card in data.offeredResources.cards:
         resources_after_trade[Resources(card)] += 1
     for card in data.wantedResources.cards:
         resources_after_trade[Resources(card)] -= 1
-    return distanceFromObjective(resources_after_trade) < distanceFromObjective(board.resources)
-   
-def findNewRobberTile():
+    return distance_from_objective(resources_after_trade) < distance_from_objective(BOARD.resources)
+
+
+def find_new_robber_tile():
     high_index = -1
     high_block = -1
 
-    for i, tile in enumerate(board.tiles):
-        if board.robber_tile == i: continue
-        if tile.tileType == 0: continue # desert tile doesn't have the _diceProbability attribute
+    for i, tile in enumerate(BOARD.tiles):
+        if BOARD.robber_tile == i:
+            continue
+        if tile.tileType == 0:
+            continue  # desert tile doesn't have the _diceProbability attribute
 
         block = 0
-        for vertex_index in board.tile_vertices[i]:
-            vertex = board.vertices[vertex_index]
+        for vertex_index in BOARD.tile_vertices[i]:
+            vertex = BOARD.vertices[vertex_index]
 
-            if vertex.owner == player_color: break
-            if vertex.owner != 0: 
+            if vertex.owner == PLAYER_COLOR:
+                break
+            if vertex.owner != 0:
                 block += tile._diceProbability * vertex.buildingType
-        else: # only runs if execution isnt broken during loop
+        else:  # only runs if execution isnt broken during loop
             if block > high_block:
                 high_block = block
                 high_index = i
-    
+
     return high_index
 
-def pickCardsToDiscard(amount):
-    print("pickCardsToDiscard({0})".format(amount))
 
+def pick_cards_to_discard(amount):
     next_cards = None
 
-    if game_state == GameState.EXPANDING:
-        if findNextRoad(None, False) != None:
+    if GAME_STATE == GameState.EXPANDING:
+        if find_next_road(None, False) is not None:
             next_cards = road_cards
         else:
             next_cards = settlement_cards
-    elif game_state == GameState.CITIES:
+    elif GAME_STATE == GameState.CITIES:
         next_cards = city_cards
-    elif game_state == GameState.DEV_CARDS:
+    elif GAME_STATE == GameState.DEV_CARDS:
         next_cards = dev_card_cards
 
-    print("next_cards = {0}".format(next_cards))
-
-    non_discarded_cards = copy.deepcopy(board.resources)
+    non_discarded_cards = copy.deepcopy(BOARD.resources)
     discarded_cards = []
     extra_cards = True
     # 1. round robin cards not necessary for next buy
     # 2. round robin cards necessary for next buy
     while len(discarded_cards) < amount:
-        print("discarded_cards =  {0}".format(discarded_cards))
-
         extra_card_found = False
         for resource in Resources:
-            print("resource = {0}".format(resource))
-
             if extra_cards:
-                print("discarded_cards = {0}".format(discarded_cards))
-                print("non_discarded_cards = {0}".format(non_discarded_cards))
-                
-                if (resource not in next_cards or non_discarded_cards[resource] > next_cards[resource]) and \
+                if (resource not in next_cards or \
+                    non_discarded_cards[resource] > next_cards[resource]) and \
                    non_discarded_cards[resource] > 0:
-                    print("-- DISCARDING {0}".format(resource.value))
-
                     discarded_cards.append(resource.value)
-
                     non_discarded_cards[resource] -= 1
                     extra_card_found = True
             else:
@@ -392,53 +417,63 @@ def pickCardsToDiscard(amount):
                     discarded_cards.append(resource.value)
                     non_discarded_cards[resource] -= 1
 
-            if len(discarded_cards) == amount: break
-        
-        print("completed for loop")
-        if extra_card_found is False: extra_cards = False
-    
-    print("discarded_cards = {0}".format(discarded_cards))
-    
+            if len(discarded_cards) == amount:
+                break
+        if extra_card_found is False:
+            extra_cards = False
     return discarded_cards
 
-def buildRoad(road_index):
-    send({ "action": 0, "data": road_index })
 
-def buildSettlement(settlement_index):
-    send({ "action": 1, "data": settlement_index })
+def build_road(road_index):
+    send({"action": 0, "data": road_index})
 
-def buildCity(settlement_index):
-    send({ "action": 2, "data": settlement_index })
 
-def buyDevCard():
-    send({ "action": 3 })
+def build_settlement(settlement_index):
+    send({"action": 1, "data": settlement_index})
 
-def throwDice():
-    send({ "action": 4 })
 
-def passTurn():
-    send({ "action": 5 })
+def build_city(settlement_index):
+    send({"action": 2, "data": settlement_index})
 
-def acceptTrade(id):
-    send({ "action": 6, "data": id})
 
-def rejectTrade(id):
-    send({ "action": 7, "data": id})
+def buy_dev_card():
+    send({"action": 3})
 
-def moveRobber(tile_index):
-    send({ "action": 8, "data": tile_index})
 
-def robPlayer(player):
-    send({ "action": 9, "data": player})
+def throw_dice():
+    send({"action": 4})
 
-def discardCards(cards):
-    send({ "action": 10, "data": cards})
+
+def pass_turn():
+    send({"action": 5})
+
+
+def accept_trade(trade_id):
+    send({"action": 6, "data": trade_id})
+
+
+def reject_trade(trade_id):
+    send({"action": 7, "data": trade_id})
+
+
+def move_robber(tile_index):
+    send({"action": 8, "data": tile_index})
+
+
+def rob_player(player):
+    send({"action": 9, "data": player})
+
+
+def discard_cards(cards):
+    send({"action": 10, "data": cards})
+
 
 def send(data):
-    dataInJson = json.dumps(data)
-    queue.put_nowait(dataInJson)
+    data_in_json = json.dumps(data)
+    QUEUE.put_nowait(data_in_json)
 
-queue = asyncio.Queue()
+
+QUEUE = asyncio.Queue()
 start_server = websockets.serve(handler, "localhost", 8765)
 asyncio.get_event_loop().run_until_complete(start_server)
 asyncio.get_event_loop().run_forever()

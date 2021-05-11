@@ -10,7 +10,7 @@ const colonistioActions = Object.freeze({
     MOVE_ROBBER: "16",
     ROB_PLAYER: "18",
     PASS_TURN: "19",
-    DISCARD_CARDS:  "20",
+    DISCARD_CARDS: "20",
     BUY_DEVELOPMENT_CARD: "21",
     WANT_BUILD_ROAD: "22",
     BUILD_ROAD: "23",
