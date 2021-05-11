@@ -7,6 +7,7 @@
 
 const colonistioActions = Object.freeze({
     THROW_DICE: "15",
+    MOVE_ROBBER: "16",
     PASS_TURN: "19",
     BUY_DEVELOPMENT_CARD: "21",
     WANT_BUILD_ROAD: "22",
@@ -14,7 +15,9 @@ const colonistioActions = Object.freeze({
     WANT_BUILD_SETTLEMENT: "25",
     BUILD_SETTLEMENT: "26",
     WANT_BUILD_CITY: "27",
-    BUILD_CITY: "28"
+    BUILD_CITY: "28",
+    ACCEPT_TRADE: "55",
+    REJECT_TRADE: "57"
 })
 
 const EncoderModule = (function () {
@@ -151,6 +154,15 @@ botSocket.onmessage = function (event) {
         break
     case 5: // Pass turn
         sendEncoded({ id: colonistioActions.PASS_TURN, data: true })
+        break
+    case 6: // Accept trade
+        sendEncoded({ id: colonistioActions.ACCEPT_TRADE, data: parsedData.data })
+        break
+    case 7: // Reject trade
+        sendEncoded({ id: colonistioActions.REJECT_TRADE, data: parsedData.data })
+        break
+    case 8: // Reject trade
+        sendEncoded({ id: colonistioActions.MOVE_ROBBER, data: parsedData.data })
         break
     }
 }

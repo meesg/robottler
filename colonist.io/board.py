@@ -5,6 +5,8 @@ class Board:
     vertices = None
     edges = None
 
+    robber_tile = None
+
     resources = {
         Resources.WOOD: 0,
         Resources.BRICK: 0,
@@ -16,6 +18,7 @@ class Board:
     own_settlements = []
     adjacency_map = []
     vertex_tiles = []
+    tile_vertices = []
 
     def __init__(self, board):
         self.tiles = board.tileState.tiles
@@ -23,6 +26,8 @@ class Board:
         self.edges = board.tileState.tileEdges
 
         self.buildAdjencyMap()
+        self.buildVertexTiles()
+        self.buildTileVertices()
 
     def buildAdjencyMap(self):
         for vertex in self.vertices:
@@ -36,8 +41,6 @@ class Board:
                 "vertex_index": self.getOtherVertexNextToEdge(self.edges[edge_index], vertex) }
                 , self.getEdgesNextToVertex(x, y, z))
             self.adjacency_map.append(list(data))
-
-            self.buildVertexTiles()
 
     def buildVertexTiles(self):
         for vertex in self.vertices:
@@ -57,12 +60,37 @@ class Board:
                         
             self.vertex_tiles.append(tiles)
 
-    def getEdgeIndexByCoordinates(self, x, y, z):
-        i = 0
-        for edge in self.edges:
+    def buildTileVertices(self):
+        for tile in self.tiles:
+            loc = tile.hexFace
+
+            vertices = []
+
+            vertices.append(self.findVertexIndexByCoordinates(loc.x, loc.y, 0))
+            vertices.append(self.findVertexIndexByCoordinates(loc.x, loc.y, 1))
+            vertices.append(self.findVertexIndexByCoordinates(loc.x + 1, loc.y - 1, 1))
+            vertices.append(self.findVertexIndexByCoordinates(loc.x, loc.y - 1, 1))
+            vertices.append(self.findVertexIndexByCoordinates(loc.x, loc.y + 1, 0))
+            vertices.append(self.findVertexIndexByCoordinates(loc.x - 1, loc.y + 1, 0))
+            
+            self.tile_vertices.append(vertices)
+
+    def findTileIndexByCoordinates(self, x, y):
+        for i, tile in enumerate(self.tiles):
+            if tile.hexFace.x == x and tile.hexFace.y == y:
+                return i
+        return None
+
+    def findEdgeIndexByCoordinates(self, x, y, z):
+        for i, edge in enumerate(self.edges):
             if edge.hexEdge.x == x and edge.hexEdge.y == y and edge.hexEdge.z == z:
                 return i
-            i += 1
+        return None
+
+    def findVertexIndexByCoordinates(self, x, y, z): 
+        for i, vertex in enumerate(self.vertices):
+            if vertex.hexCorner.x == x and vertex.hexCorner.y == y and vertex.hexCorner.z == z:
+                return i
         return None
 
     # x, y, z: edge coordinates
@@ -70,23 +98,17 @@ class Board:
     def getEdgesNextToVertex(self, x, y, z):
         edges = []
         if z == 0:
-            edges.append(self.getEdgeIndexByCoordinates(x, y, 0))
-            edges.append(self.getEdgeIndexByCoordinates(x + 1, y - 1, 1))
-            edges.append(self.getEdgeIndexByCoordinates(x + 1, y - 1, 2))
+            edges.append(self.findEdgeIndexByCoordinates(x, y, 0))
+            edges.append(self.findEdgeIndexByCoordinates(x + 1, y - 1, 1))
+            edges.append(self.findEdgeIndexByCoordinates(x + 1, y - 1, 2))
         if z == 1:
-            edges.append(self.getEdgeIndexByCoordinates(x, y + 1, 0))
-            edges.append(self.getEdgeIndexByCoordinates(x, y + 1, 1))
-            edges.append(self.getEdgeIndexByCoordinates(x, y, 2))
+            edges.append(self.findEdgeIndexByCoordinates(x, y + 1, 0))
+            edges.append(self.findEdgeIndexByCoordinates(x, y + 1, 1))
+            edges.append(self.findEdgeIndexByCoordinates(x, y, 2))
 
         edges = [x for x in edges if x is not None] # remove None roads for vertices next to harbor tiles
 
         return edges
-
-    def findVertexIndexByCoordinates(self, x, y, z): 
-        for vertex_index, vertex in enumerate(self.vertices):
-            if vertex.hexCorner.x == x and vertex.hexCorner.y == y and vertex.hexCorner.z == z:
-                return vertex_index
-        return None
 
     def getVerticesNextToEdge(self, edge):
         x = edge.hexEdge.x

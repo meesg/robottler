@@ -1,7 +1,8 @@
 from aioconsole import ainput
-from types import SimpleNamespace
 from enum import Enum
+from types import SimpleNamespace
 import asyncio
+import copy
 import json
 import pathlib
 import ssl
@@ -15,12 +16,19 @@ player_color = 1 # TODO: find a way to find this procedurally in ingame lobbies,
 board = None
 queue = None
 
+next_settlement = None # TODO: clean
+
 class GameState(Enum):
     SETUP_SETTLEMENT = 0
     SETUP_ROAD = 1
     EXPANDING = 2
     CITIES = 3
     DEV_CARDS = 4
+
+road_cards = { Resources.WOOD: 1, Resources.BRICK: 1 }
+settlement_cards = { Resources.WOOD: 1, Resources.BRICK: 1, Resources.SHEEP: 1, Resources.WHEAT: 1 }
+city_cards = { Resources.WHEAT: 2, Resources.ORE: 3 }
+dev_card_cards = { Resources.SHEEP: 1, Resources.WHEAT: 1, Resources.ORE: 1 }
 
 game_state = GameState.SETUP_SETTLEMENT
 
@@ -34,6 +42,12 @@ async def consumer_handler(websocket, path):
             elif hasattr(data, "currentTurnState"): # Game state information
                 global game_state
                 if data.currentTurnPlayerColor == player_color:
+                    if data.currentActionState == 22:
+                        print("We have to place robber!")
+                        new_robber_tile_index = findNewRobberTile()
+                        print("New robber tile index : {0}".format(new_robber_tile_index))
+                        moveRobber(new_robber_tile_index)
+
                     if data.currentTurnState == 0:
                         if data.currentActionState == 1 and game_state == GameState.SETUP_SETTLEMENT:
                             print("Building settlement")
@@ -56,14 +70,14 @@ async def consumer_handler(websocket, path):
                         if data.currentActionState == 0:
                             throwDice()
                     if data.currentTurnState == 2:
-                        print("My turn!")
                         next_road = findNextRoad(None, False)
-                        print(next_road)
                         if next_road != None:
-                            if board.resources[Resources.WOOD] > 0 and board.resources[Resources.BRICK] > 0:
+                            if distanceFromCards(road_cards, board.resources) == 0:
                                 buildRoad(next_road)
-                        # passTurn()
-            elif hasattr(data, "givingPlayer"): # Trades
+                        elif distanceFromCards(settlement_cards, board.resources) == 0:
+                            buildSettlement(next_settlement)
+                            # passTurn()
+            elif hasattr(data, "givingPlayer"): # Trade information
                 if (data.givingPlayer == player_color):
                     for card in data.givingCards:
                         board.resources[Resources(card)] -= 1
@@ -74,6 +88,19 @@ async def consumer_handler(websocket, path):
                         board.resources[Resources(card)] += 1
                     for card in data.receivingCards:
                         board.resources[Resources(card)] -= 1
+            elif hasattr(data, "offeredResources"): # Active trade offer
+                # Check if we're allowed to take this trade and have to respond
+                for player_actions in data.actions:
+                    if player_actions.player == player_color:
+                        if len(player_actions.allowedTradeActions) > 0:
+                            break
+                        else:
+                            return
+                # Respond to trade offer
+                if (isFavourableTrade(data)):
+                    acceptTrade(data.id)
+                else:
+                    rejectTrade(data.id)
             elif isinstance(data, list) and hasattr(data[0], "hexCorner"): # Settlement update (probably upgrading to a city works the same)
                 addSettlementToBoard(data[0])
             elif isinstance(data, list) and hasattr(data[0], "hexEdge"):
@@ -83,7 +110,11 @@ async def consumer_handler(websocket, path):
                     print(entry)
                     if entry.owner == player_color: 
                         board.resources[Resources(entry.card)] += 1 # TODO: fix for cities, probably can just increment with distribitionType
-                pass
+            elif isinstance(data, list) and hasattr(data[0], "tilePieceTypes"): # Robber move information
+                new_robber_tile = data[1]
+                loc = new_robber_tile.hexFace
+                board.robber_tile = board.findTileIndexByCoordinates(loc.x, loc.y)
+                print("New robber_tile: {0}".format(board.robber_tile))
         except:
             pass
 
@@ -128,8 +159,11 @@ def addSettlementToBoard(newCorner):
     z = newCorner.hexCorner.z
     print("Adding settlement: ({x}, {y}, {z})".format(x=x, y=y, z=z))
     corner = findCornerByCoordinates(x, y, z)
+    
     if corner is None: raise ValueError("Given coordinates don't exist on the board.")
+    
     corner.owner = newCorner.owner
+    corner.buildingType = newCorner.buildingType
     
     if z == 0:
         restrictCorner(x, y - 1, 1)
@@ -226,6 +260,8 @@ def findNextRoad(settlement_index, is_setup):
             high_prod = prod
             high_path = entry["path"]
 
+    global next_settlement
+    next_settlement = high_vertex_index
     for edge_index in high_path:
         if board.edges[edge_index].owner == 0:
             return edge_index
@@ -255,6 +291,60 @@ def findSettlementSpots(prev_vertex_index, vertex_index, path, degree):
     
     return candidates
 
+def distanceFromCards(needed, cards):
+    dist = 0
+    for resource, amount in needed.items():
+        dist += max(0, amount - cards[resource])
+    return dist
+
+def distanceFromObjective(cards):
+    if game_state == GameState.EXPANDING:
+        if findNextRoad(None, False) != None:
+            return distanceFromCards(road_cards, cards)
+        else:
+            return distanceFromCards(settlement_cards, cards)
+    if game_state == GameState.CITIES:
+        return distanceFromCards(city_cards, cards)
+    if game_state == GameState.DEV_CARDS:
+        return distanceFromCards(dev_card_cards, cards)
+
+def isFavourableTrade(data):
+    resources_after_trade = copy.deepcopy(board.resources)
+    for card in data.offeredResources.cards:
+        resources_after_trade[Resources(card)] += 1
+    for card in data.wantedResources.cards:
+        resources_after_trade[Resources(card)] -= 1
+    return distanceFromObjective(resources_after_trade) < distanceFromObjective(board.resources)
+   
+def findNewRobberTile():
+    print("findNewRobberTile()")
+    high_index = -1
+    high_block = -1
+
+    for i, tile in enumerate(board.tiles):
+        print(tile)
+
+        if board.robber_tile == i: continue
+        if tile.tileType == 0: continue # desert tile doesn't have the _diceProbability attribute
+
+        block = 0
+        for vertex_index in board.tile_vertices[i]:
+            vertex = board.vertices[vertex_index]
+            print(vertex)
+
+            if vertex.owner == player_color: break
+            if vertex.owner != 0: 
+                block += tile._diceProbability * vertex.buildingType
+        else: # only runs if execution isnt broken during loop
+            if block > high_block:
+                print("new high {0} | {1}".format(i, block))
+                high_block = block
+                high_index = i
+    
+    print(high_index)
+    return high_index
+
+
 def buildRoad(road_index):
     send({ "action": 0, "data": road_index })
 
@@ -272,6 +362,15 @@ def throwDice():
 
 def passTurn():
     send({ "action": 5 })
+
+def acceptTrade(id):
+    send({ "action": 6, "data": id})
+
+def rejectTrade(id):
+    send({ "action": 7, "data": id})
+
+def moveRobber(tile_index):
+    send({ "action": 8, "data": tile_index})
 
 def send(data):
     dataInJson = json.dumps(data)
