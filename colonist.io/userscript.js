@@ -8,6 +8,7 @@
 const colonistioActions = Object.freeze({
     THROW_DICE: "15",
     MOVE_ROBBER: "16",
+    ROB_PLAYER: "18",
     PASS_TURN: "19",
     BUY_DEVELOPMENT_CARD: "21",
     WANT_BUILD_ROAD: "22",
@@ -161,8 +162,11 @@ botSocket.onmessage = function (event) {
     case 7: // Reject trade
         sendEncoded({ id: colonistioActions.REJECT_TRADE, data: parsedData.data })
         break
-    case 8: // Reject trade
+    case 8: // Move robber
         sendEncoded({ id: colonistioActions.MOVE_ROBBER, data: parsedData.data })
+        break
+    case 9: // Rob player
+        sendEncoded({ id: colonistioActions.ROB_PLAYER, data: parsedData.data })
         break
     }
 }

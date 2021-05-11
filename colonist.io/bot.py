@@ -42,12 +42,12 @@ async def consumer_handler(websocket, path):
             elif hasattr(data, "currentTurnState"): # Game state information
                 global game_state
                 if data.currentTurnPlayerColor == player_color:
+                    # need to be outside the currentTurnState ifs, because it can happen in both turnstate 1 and 2
                     if data.currentActionState == 22:
                         print("We have to place robber!")
                         new_robber_tile_index = findNewRobberTile()
                         print("New robber tile index : {0}".format(new_robber_tile_index))
                         moveRobber(new_robber_tile_index)
-
                     if data.currentTurnState == 0:
                         if data.currentActionState == 1 and game_state == GameState.SETUP_SETTLEMENT:
                             print("Building settlement")
@@ -77,6 +77,10 @@ async def consumer_handler(websocket, path):
                         elif distanceFromCards(settlement_cards, board.resources) == 0:
                             buildSettlement(next_settlement)
                             # passTurn()
+            elif hasattr(data, "allowableActionState"): # TODO: remember the player next to tile we place robber on so we can do the logic on the turn logic package
+                if (data.allowableActionState == 23):
+                    print("stealing time")
+                    robPlayer(data.playersToSelect[0])
             elif hasattr(data, "givingPlayer"): # Trade information
                 if (data.givingPlayer == player_color):
                     for card in data.givingCards:
@@ -317,31 +321,25 @@ def isFavourableTrade(data):
     return distanceFromObjective(resources_after_trade) < distanceFromObjective(board.resources)
    
 def findNewRobberTile():
-    print("findNewRobberTile()")
     high_index = -1
     high_block = -1
 
     for i, tile in enumerate(board.tiles):
-        print(tile)
-
         if board.robber_tile == i: continue
         if tile.tileType == 0: continue # desert tile doesn't have the _diceProbability attribute
 
         block = 0
         for vertex_index in board.tile_vertices[i]:
             vertex = board.vertices[vertex_index]
-            print(vertex)
 
             if vertex.owner == player_color: break
             if vertex.owner != 0: 
                 block += tile._diceProbability * vertex.buildingType
         else: # only runs if execution isnt broken during loop
             if block > high_block:
-                print("new high {0} | {1}".format(i, block))
                 high_block = block
                 high_index = i
     
-    print(high_index)
     return high_index
 
 
@@ -371,6 +369,9 @@ def rejectTrade(id):
 
 def moveRobber(tile_index):
     send({ "action": 8, "data": tile_index})
+
+def robPlayer(player):
+    send({ "action": 9, "data": player})
 
 def send(data):
     dataInJson = json.dumps(data)
