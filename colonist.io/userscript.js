@@ -10,6 +10,7 @@ const colonistioActions = Object.freeze({
     MOVE_ROBBER: "16",
     ROB_PLAYER: "18",
     PASS_TURN: "19",
+    DISCARD_CARDS:  "20",
     BUY_DEVELOPMENT_CARD: "21",
     WANT_BUILD_ROAD: "22",
     BUILD_ROAD: "23",
@@ -167,6 +168,9 @@ botSocket.onmessage = function (event) {
         break
     case 9: // Rob player
         sendEncoded({ id: colonistioActions.ROB_PLAYER, data: parsedData.data })
+        break
+    case 10: // Discard cards
+        sendEncoded({ id: colonistioActions.DISCARD_CARDS, data: parsedData.data })
         break
     }
 }

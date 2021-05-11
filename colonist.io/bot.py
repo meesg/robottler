@@ -41,6 +41,7 @@ async def consumer_handler(websocket, path):
                 board = Board(data)
             elif hasattr(data, "currentTurnState"): # Game state information
                 global game_state
+
                 if data.currentTurnPlayerColor == player_color:
                     # need to be outside the currentTurnState ifs, because it can happen in both turnstate 1 and 2
                     if data.currentActionState == 22:
@@ -76,11 +77,15 @@ async def consumer_handler(websocket, path):
                                 buildRoad(next_road)
                         elif distanceFromCards(settlement_cards, board.resources) == 0:
                             buildSettlement(next_settlement)
-                            # passTurn()
+                        passTurn()
             elif hasattr(data, "allowableActionState"): # TODO: remember the player next to tile we place robber on so we can do the logic on the turn logic package
-                if (data.allowableActionState == 23):
+                if data.allowableActionState == 23:
                     print("stealing time")
                     robPlayer(data.playersToSelect[0])
+            elif hasattr(data, "selectCardFormat"):
+                    print("disarding time")
+                    cards = pickCardsToDiscard(data.selectCardFormat.amountOfCardsToSelect)
+                    discardCards(cards)              
             elif hasattr(data, "givingPlayer"): # Trade information
                 if (data.givingPlayer == player_color):
                     for card in data.givingCards:
@@ -111,7 +116,6 @@ async def consumer_handler(websocket, path):
                 addRoadToBoard(data[0])
             elif isinstance(data, list) and hasattr(data[0], "owner"): # Cards being handed out
                 for entry in data:
-                    print(entry)
                     if entry.owner == player_color: 
                         board.resources[Resources(entry.card)] += 1 # TODO: fix for cities, probably can just increment with distribitionType
             elif isinstance(data, list) and hasattr(data[0], "tilePieceTypes"): # Robber move information
@@ -342,6 +346,60 @@ def findNewRobberTile():
     
     return high_index
 
+def pickCardsToDiscard(amount):
+    print("pickCardsToDiscard({0})".format(amount))
+
+    next_cards = None
+
+    if game_state == GameState.EXPANDING:
+        if findNextRoad(None, False) != None:
+            next_cards = road_cards
+        else:
+            next_cards = settlement_cards
+    elif game_state == GameState.CITIES:
+        next_cards = city_cards
+    elif game_state == GameState.DEV_CARDS:
+        next_cards = dev_card_cards
+
+    print("next_cards = {0}".format(next_cards))
+
+    non_discarded_cards = copy.deepcopy(board.resources)
+    discarded_cards = []
+    extra_cards = True
+    # 1. round robin cards not necessary for next buy
+    # 2. round robin cards necessary for next buy
+    while len(discarded_cards) < amount:
+        print("discarded_cards =  {0}".format(discarded_cards))
+
+        extra_card_found = False
+        for resource in Resources:
+            print("resource = {0}".format(resource))
+
+            if extra_cards:
+                print("discarded_cards = {0}".format(discarded_cards))
+                print("non_discarded_cards = {0}".format(non_discarded_cards))
+                
+                if (resource not in next_cards or non_discarded_cards[resource] > next_cards[resource]) and \
+                   non_discarded_cards[resource] > 0:
+                    print("-- DISCARDING {0}".format(resource.value))
+
+                    discarded_cards.append(resource.value)
+
+                    non_discarded_cards[resource] -= 1
+                    extra_card_found = True
+            else:
+                if non_discarded_cards[resource] > 0:
+                    discarded_cards.append(resource.value)
+                    non_discarded_cards[resource] -= 1
+
+            if len(discarded_cards) == amount: break
+        
+        print("completed for loop")
+        if extra_card_found is False: extra_cards = False
+    
+    print("discarded_cards = {0}".format(discarded_cards))
+    
+    return discarded_cards
 
 def buildRoad(road_index):
     send({ "action": 0, "data": road_index })
@@ -372,6 +430,9 @@ def moveRobber(tile_index):
 
 def robPlayer(player):
     send({ "action": 9, "data": player})
+
+def discardCards(cards):
+    send({ "action": 10, "data": cards})
 
 def send(data):
     dataInJson = json.dumps(data)
