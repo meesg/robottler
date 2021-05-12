@@ -192,8 +192,9 @@ def update_vertex(new_vertex_info):
             BOARD.own_production[tile.tileType] += tile._diceProbability
 
     neighbours = BOARD.adjacency_map[vertex_index]
+
     for neighbour in neighbours:
-        BOARD.vertices[neighbour].restrictedStartingPlacement = True
+        BOARD.vertices[neighbour["vertex_index"]].restrictedStartingPlacement = True
 
 
 def update_edge(road):
