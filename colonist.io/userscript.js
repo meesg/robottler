@@ -18,6 +18,7 @@ const colonistioActions = Object.freeze({
     BUILD_SETTLEMENT: "26",
     WANT_BUILD_CITY: "27",
     BUILD_CITY: "28",
+    CREATE_TRADE: "54",
     ACCEPT_TRADE: "55",
     REJECT_TRADE: "57"
 })
@@ -134,6 +135,7 @@ window.WebSocket = function (...args) {
 
 botSocket.onmessage = function (event) {
     const parsedData = JSON.parse(event.data)
+    const tradeData = {}
 
     switch (parsedData.action) {
     case 0: // Build road
@@ -171,6 +173,22 @@ botSocket.onmessage = function (event) {
         break
     case 10: // Discard cards
         sendEncoded({ id: colonistioActions.DISCARD_CARDS, data: parsedData.data })
+        break
+    case 11: // Trade with bank
+        // Todo fix the player indexes for other than standard bot games
+
+        tradeData.actions = [{ player: 2, allowedTradeActions: [] }, { player: 3, allowedTradeActions: [] }, { player: 4, allowedTradeActions: [] }]
+        tradeData.activeTarges = [2, 3, 4]
+        tradeData.allowableTradeResources = [0]
+        tradeData.creator = 1
+        tradeData.id = "0"
+        tradeData.isCounterOffer = false
+        tradeData.offeredResources = { allowableCardTypes: [0], cards: parsedData.data.offered }
+        tradeData.responses = [{ player: 2, response: 2 }, { player: 3, response: 2 }, { player: 4, response: 2 }]
+        tradeData.targets = [2, 3, 4]
+        tradeData.wantedResources = { allowableCardTypes: [0], cards: parsedData.data.wanted }
+
+        sendEncoded({ id: colonistioActions.CREATE_TRADE, data: tradeData })
         break
     }
 }

@@ -8,7 +8,15 @@ class Board:
 
     robber_tile = None
 
-    own_production = resources = {
+    own_production = {
+        Resources.WOOD: 0,
+        Resources.BRICK: 0,
+        Resources.SHEEP: 0,
+        Resources.WHEAT: 0,
+        Resources.ORE: 0
+    }
+
+    resources = {
         Resources.WOOD: 0,
         Resources.BRICK: 0,
         Resources.SHEEP: 0,
@@ -17,6 +25,7 @@ class Board:
     }
 
     own_settlements = []
+    own_cities = []
     adjacency_map = []
     vertex_tiles = []
     tile_vertices = []
@@ -47,13 +56,15 @@ class Board:
 
             tiles = []
 
-            tiles.append(self.find_tile_by_coordinates(loc.x, loc.y))
+            tiles.append(self.find_tile_index_by_coordinates(loc.x, loc.y))
             if loc.z == 0:
-                tiles.append(self.find_tile_by_coordinates(loc.x, loc.y - 1))
-                tiles.append(self.find_tile_by_coordinates(loc.x + 1, loc.y - 1))
+                tiles.append(self.find_tile_index_by_coordinates(loc.x, loc.y - 1))
+                tiles.append(self.find_tile_index_by_coordinates(
+                    loc.x + 1, loc.y - 1))
             else:
-                tiles.append(self.find_tile_by_coordinates(loc.x - 1, loc.y + 1))
-                tiles.append(self.find_tile_by_coordinates(loc.x, loc.y + 1))
+                tiles.append(self.find_tile_index_by_coordinates(
+                    loc.x - 1, loc.y + 1))
+                tiles.append(self.find_tile_index_by_coordinates(loc.x, loc.y + 1))
 
             tiles = [x for x in tiles if x is not None]
 
@@ -65,8 +76,10 @@ class Board:
 
             vertices = []
 
-            vertices.append(self.find_vertex_index_by_coordinates(loc.x, loc.y, 0))
-            vertices.append(self.find_vertex_index_by_coordinates(loc.x, loc.y, 1))
+            vertices.append(
+                self.find_vertex_index_by_coordinates(loc.x, loc.y, 0))
+            vertices.append(
+                self.find_vertex_index_by_coordinates(loc.x, loc.y, 1))
             vertices.append(self.find_vertex_index_by_coordinates(
                 loc.x + 1, loc.y - 1, 1))
             vertices.append(
@@ -96,8 +109,6 @@ class Board:
                 return i
         return None
 
-    # x, y, z: edge coordinates
-    # returns
     def get_edges_next_to_vertex(self, x, y, z):
         edges = []
         if z == 0:
@@ -125,9 +136,11 @@ class Board:
             vertices.append(self.find_vertex_index_by_coordinates(x, y - 1, 1))
         if z == 1:
             vertices.append(self.find_vertex_index_by_coordinates(x, y - 1, 1))
-            vertices.append(self.find_vertex_index_by_coordinates(x - 1, y + 1, 0))
+            vertices.append(
+                self.find_vertex_index_by_coordinates(x - 1, y + 1, 0))
         if z == 2:
-            vertices.append(self.find_vertex_index_by_coordinates(x - 1, y + 1, 0))
+            vertices.append(
+                self.find_vertex_index_by_coordinates(x - 1, y + 1, 0))
             vertices.append(self.find_vertex_index_by_coordinates(x, y, 1))
 
         return vertices

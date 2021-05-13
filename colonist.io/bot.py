@@ -14,9 +14,6 @@ PLAYER_COLOR = 1
 BOARD = None
 QUEUE = None
 
-NEXT_SETTLEMENT = None  # TODO: clean
-
-
 class GameState(Enum):
     SETUP_SETTLEMENT = 0
     SETUP_ROAD = 1
@@ -24,17 +21,26 @@ class GameState(Enum):
     CITIES = 3
     DEV_CARDS = 4
 
+class PurchaseType(Enum):
+    ROAD = 0
+    SETTLEMENT = 1
+    CITY = 2
+    DEV_CARD = 3
 
-road_cards = {Resources.WOOD: 1, Resources.BRICK: 1}
-settlement_cards = {Resources.WOOD: 1, Resources.BRICK: 1,
-                    Resources.SHEEP: 1, Resources.WHEAT: 1}
-city_cards = {Resources.WHEAT: 2, Resources.ORE: 3}
-dev_card_cards = {Resources.SHEEP: 1, Resources.WHEAT: 1, Resources.ORE: 1}
+cards_needed = {PurchaseType.ROAD:       {Resources.WOOD: 1, Resources.BRICK: 1},
+                PurchaseType.SETTLEMENT: {Resources.WOOD: 1, Resources.BRICK: 1,
+                                   Resources.SHEEP: 1, Resources.WHEAT: 1},
+                PurchaseType.CITY:       {Resources.WHEAT: 2, Resources.ORE: 3},
+                PurchaseType.DEV_CARD:   {Resources.SHEEP: 1, Resources.WHEAT: 1, Resources.ORE: 1}}
 
 GAME_STATE = GameState.SETUP_SETTLEMENT
 
+NEXT_ROAD = None
+NEXT_SETTLEMENT = None  # TODO: clean
+NEXT_PURCHASE = PurchaseType.ROAD
+STARTED_TRADE = False
 
-async def consumer_handler(websocket, path):
+async def consumer_handler(websocket, _path):
     async for message in websocket:
         try:
             data = json.loads(
@@ -44,6 +50,7 @@ async def consumer_handler(websocket, path):
                 BOARD = Board(data)
             elif hasattr(data, "currentTurnState"):  # Game state information
                 global GAME_STATE
+                global NEXT_PURCHASE
 
                 if data.currentTurnPlayerColor == PLAYER_COLOR:
                     # need to be outside the currentTurnState ifs,
@@ -61,13 +68,14 @@ async def consumer_handler(websocket, path):
                             settlement_index = find_highest_producing_vertex()
 
                             build_settlement(settlement_index)
-                            BOARD.own_settlements.append(settlement_index)
 
                             GAME_STATE = GameState.SETUP_ROAD
                         if data.currentActionState == 3 and GAME_STATE == GameState.SETUP_ROAD:
                             print("Building road")
-                            road_index = find_next_road(
-                                BOARD.own_settlements[-1], True)
+                            road_index = find_next_road(BOARD.own_settlements[-1], True)
+                            if road_index == None:
+                                print("road_index == None")
+                                road_index = BOARD.adjacency_map[BOARD.own_settlements[-1]][0]["edge_id"]
                             build_road(road_index)
 
                             if len(BOARD.own_settlements) < 2:
@@ -78,13 +86,33 @@ async def consumer_handler(websocket, path):
                         if data.currentActionState == 0:
                             throw_dice()
                     if data.currentTurnState == 2:
-                        next_road = find_next_road(None, False)
-                        if next_road is not None:
-                            if distance_from_cards(road_cards, BOARD.resources) == 0:
-                                build_road(next_road)
-                        elif distance_from_cards(settlement_cards, BOARD.resources) == 0:
-                            build_settlement(NEXT_SETTLEMENT)
-                        pass_turn()
+                        print("cards : {0}".format(cards_needed))
+                        NEXT_PURCHASE = calculate_next_purchase()
+                        print("NEXT_PURCHASE: {0}".format(NEXT_PURCHASE))
+                        
+                        print("cards[NEXT_PURCHASE] : {0}".format(cards_needed[NEXT_PURCHASE]))
+
+                        if distance_from_cards(cards_needed[NEXT_PURCHASE], BOARD.resources) > 0:
+                            trade_with_bank()
+                        if distance_from_cards(cards_needed[NEXT_PURCHASE], BOARD.resources) == 0:
+                            if NEXT_PURCHASE == PurchaseType.ROAD:
+                                build_road(find_next_road(None, False))
+                            if NEXT_PURCHASE == PurchaseType.SETTLEMENT:
+                                build_settlement(NEXT_SETTLEMENT)
+                            if NEXT_PURCHASE == PurchaseType.CITY:
+                                build_city(BOARD.own_settlements[0])
+                            if NEXT_PURCHASE == PurchaseType.DEV_CARD:
+                                buy_dev_card()
+
+                        # next_road = find_next_road(None, False)
+                        # if next_road is not None:
+                        #     needed_cards = cards[PurchaseType.ROAD]
+                        #     if distance_from_cards(needed_cards, BOARD.resources) == 0:
+                        #         build_road(next_road)
+                        # elif distance_from_cards(cards[PurchaseType.SETTLEMENT], BOARD.resources) == 0:
+                        #     build_settlement(NEXT_SETTLEMENT)
+                        if not STARTED_TRADE:
+                            pass_turn()
             # TODO: remember the player next to tile we place robber on
             # so we can do the logic on the turn logic package
             elif hasattr(data, "allowableActionState"):
@@ -116,6 +144,7 @@ async def consumer_handler(websocket, path):
                         else:
                             return
                 # Respond to trade offer
+                NEXT_PURCHASE = calculate_next_purchase()
                 if is_favourable_trade(data):
                     accept_trade(data.id)
                 else:
@@ -142,7 +171,7 @@ async def consumer_handler(websocket, path):
             pass
 
 
-async def producer_handler(websocket, path):
+async def producer_handler(websocket, _path):
     while True:
         message = await QUEUE.get()
         await websocket.send(message)
@@ -153,7 +182,7 @@ async def handler(websocket, path):
         consumer_handler(websocket, path))
     producer_task = asyncio.ensure_future(
         producer_handler(websocket, path))
-    done, pending = await asyncio.wait(
+    _done, pending = await asyncio.wait(
         [consumer_task, producer_task],
         return_when=asyncio.FIRST_COMPLETED,
     )
@@ -161,46 +190,42 @@ async def handler(websocket, path):
         task.cancel()
 
 
-def find_vertex_by_coordinates(x, y, z):
-    for corner in BOARD.vertices:
-        if corner.hexCorner.x == x and corner.hexCorner.y == y and corner.hexCorner.z == z:
-            return corner
-    return None
-
-
-def find_edge_by_coordinates(x, y, z):
-    for edge in BOARD.edges:
-        if edge.hexEdge.x == x and edge.hexEdge.y == y and edge.hexEdge.z == z:
-            return edge
-    return None
-
-
 def update_vertex(new_vertex_info):
+    print("update_vertex")
+
     loc = new_vertex_info.hexCorner
     vertex_index = BOARD.find_vertex_index_by_coordinates(loc.x, loc.y, loc.z)
-    board_vertex = find_vertex_by_coordinates(loc.x, loc.y, loc.z)
+    vertex = BOARD.vertices[vertex_index]
 
-    if board_vertex is None:
+    if vertex is None:
         raise ValueError("Given coordinates don't exist on the board.")
 
-    board_vertex.owner = new_vertex_info.owner
-    board_vertex.buildingType = new_vertex_info.buildingType
+    vertex.owner = new_vertex_info.owner
+    vertex.buildingType = new_vertex_info.buildingType
 
-    if board_vertex.owner == 1:
+    if vertex.owner == 1:
+        if vertex.buildingType == 1:
+            BOARD.own_settlements.append(vertex_index)
+        if vertex.buildingType == 2:
+            BOARD.own_settlements.remove(vertex_index)
+            BOARD.own_cities.append(vertex_index)
+
         tiles = BOARD.vertex_tiles[vertex_index]
-        for tile in tiles:
-            BOARD.own_production[tile.tileType] += tile._diceProbability
+        for tile_index in tiles:
+            tile = BOARD.tiles[tile_index]
+            if hasattr(tile, "_diceProbability"):
+                BOARD.own_production[Resources(tile.tileType)] += tile._diceProbability
 
     neighbours = BOARD.adjacency_map[vertex_index]
-
     for neighbour in neighbours:
+        print("Restricting neighbour: {0}".format(neighbour["vertex_index"]))
         BOARD.vertices[neighbour["vertex_index"]].restrictedStartingPlacement = True
 
 
-def update_edge(road):
-    edge = find_edge_by_coordinates(
-        road.hexEdge.x, road.hexEdge.y, road.hexEdge.z)
-    edge.owner = road.owner
+def update_edge(new_edge_info):
+    loc = new_edge_info.hexEdge
+    edge_index = BOARD.find_edge_index_by_coordinates(loc.x, loc.y, loc.z)
+    BOARD.edges[edge_index].owner = new_edge_info.owner
 
 # TODO: Store tiles in a smarter way to make this a O(1) function
 
@@ -238,11 +263,12 @@ def find_vertex_production_by_id(vertex_id):
     loc = BOARD.vertices[vertex_id].hexCorner
     return find_vertex_production(loc.x, loc.y, loc.z)
 
-# Loops over all hexcorners to find the highest producing spot
-# where its still possible to build a settlement
-
 
 def find_highest_producing_vertex():
+    """ Loops over all vertices to find the highest producing spot
+    where its still possible to build a settlement
+    """
+
     i = high_index = -1
     high_prod = -1
     for i, corner in enumerate(BOARD.vertices):
@@ -256,26 +282,6 @@ def find_highest_producing_vertex():
             high_index = i
 
     return high_index
-
-
-def get_road_index_by_coordinates(x, y, z):
-    i = 0
-    for edge in BOARD.edges:
-        if edge.hexEdge.x == x and edge.hexEdge.y == y and edge.hexEdge.z == z:
-            return i
-        i += 1
-    return None
-
-# x, y, z: settlement coordinates
-# returns road index
-
-
-def get_road_next_to_settlement(x, y, z):
-    if z == 0:
-        return get_road_index_by_coordinates(x, y, 0)
-    if z == 1:
-        return get_road_index_by_coordinates(x, y, 2)
-    return None
 
 
 def find_next_road(settlement_index, is_setup):
@@ -330,25 +336,22 @@ def find_settlement_spots(prev_vertex_index, vertex_index, path, degree):
 
     return candidates
 
+def calc_missing_cards(needed, own_cards):
+    dist = 0
+    missing_cards = {}
+    for resource, amount in needed.items():
+        diff = max(0, amount - own_cards[resource])
+        dist += diff
+        if diff > 0:
+            missing_cards[resource] = diff
+    return dist, missing_cards
 
-def distance_from_cards(needed, cards):
+def distance_from_cards(needed, own_cards):
     dist = 0
     for resource, amount in needed.items():
-        dist += max(0, amount - cards[resource])
+        dist += max(0, amount - own_cards[resource])
+
     return dist
-
-
-def distance_from_objective(cards):
-    if GAME_STATE == GameState.EXPANDING:
-        if find_next_road(None, False) is not None:
-            return distance_from_cards(road_cards, cards)
-        else:
-            return distance_from_cards(settlement_cards, cards)
-    if GAME_STATE == GameState.CITIES:
-        return distance_from_cards(city_cards, cards)
-    if GAME_STATE == GameState.DEV_CARDS:
-        return distance_from_cards(dev_card_cards, cards)
-
 
 def is_favourable_trade(data):
     resources_after_trade = copy.deepcopy(BOARD.resources)
@@ -356,7 +359,8 @@ def is_favourable_trade(data):
         resources_after_trade[Resources(card)] += 1
     for card in data.wantedResources.cards:
         resources_after_trade[Resources(card)] -= 1
-    return distance_from_objective(resources_after_trade) < distance_from_objective(BOARD.resources)
+    needed = cards_needed[calculate_next_purchase()]
+    return distance_from_cards(needed, resources_after_trade) < distance_from_cards(needed, BOARD.resources)
 
 
 def find_new_robber_tile():
@@ -384,19 +388,68 @@ def find_new_robber_tile():
 
     return high_index
 
+def trade_with_bank():
+    print("trade with bank")
+
+    if distance_from_cards(cards_needed[NEXT_PURCHASE], BOARD.resources) == 0:
+        return
+
+    extra_resources = copy.deepcopy(BOARD.resources)
+    print(cards_needed[NEXT_PURCHASE])
+    for resource, amount in cards_needed[NEXT_PURCHASE].items():
+        extra_resources[resource] -= amount
+    print("extra_resources: {0}".format(extra_resources))
+    
+    dist, missing = calc_missing_cards(cards_needed[NEXT_PURCHASE], BOARD.resources)
+    print("dist: {0}".format(dist))
+    print("missing: {0}".format(missing))
+
+    print(list(missing)[0].value)
+    
+    traded = True
+    while traded:
+        traded = False
+        for resource in Resources:
+            print("Extra {0} : {1}".format(resource, extra_resources[resource]))
+            if extra_resources[resource] >= 4:
+                print("Starting 4:1 trade")
+
+                offered = [resource.value for x in range(4)]
+                wanted = [list(missing)[0].value]
+
+                print("offered : {0}".format(offered))
+                print("wanted : {0}".format(wanted))
+
+                create_trade(offered, wanted)
+                global STARTED_TRADE
+                STARTED_TRADE = True
+
+                extra_resources[resource] -= 4
+                missing[list(missing)[0]] -= 1
+
+                if missing[list(missing)[0]] <= 0:
+                    del missing[list(missing)[0]]
+                if len(missing) == 0:
+                    return
+                traded = True
+                
+
+def calculate_next_purchase():
+    print("calculate_next_purchase()")
+
+    if distance_from_cards(cards_needed[PurchaseType.CITY], BOARD.resources) < 2 and \
+       len(BOARD.own_settlements) > 0:
+        return PurchaseType.CITY
+    if len(BOARD.own_settlements) + len(BOARD.own_cities) < 3:
+        if find_next_road(None, False) is None:
+            return PurchaseType.SETTLEMENT
+        else:
+            return PurchaseType.ROAD
+    return PurchaseType.DEV_CARD
+
 
 def pick_cards_to_discard(amount):
-    next_cards = None
-
-    if GAME_STATE == GameState.EXPANDING:
-        if find_next_road(None, False) is not None:
-            next_cards = road_cards
-        else:
-            next_cards = settlement_cards
-    elif GAME_STATE == GameState.CITIES:
-        next_cards = city_cards
-    elif GAME_STATE == GameState.DEV_CARDS:
-        next_cards = dev_card_cards
+    next_cards = cards_needed[calculate_next_purchase()]
 
     non_discarded_cards = copy.deepcopy(BOARD.resources)
     discarded_cards = []
@@ -465,8 +518,13 @@ def rob_player(player):
     send({"action": 9, "data": player})
 
 
-def discard_cards(cards):
-    send({"action": 10, "data": cards})
+def discard_cards(disc_cards):
+    send({"action": 10, "data": disc_cards})
+
+
+def create_trade(offered, wanted):
+    data = {"offered": offered, "wanted": wanted}
+    send({"action": 11, "data": data})
 
 
 def send(data):
