@@ -23,6 +23,14 @@ class Board:
         Resources.WHEAT: 0,
         Resources.ORE: 0
     }
+    
+    bank_trades = {
+        Resources.WOOD: 4,
+        Resources.BRICK: 4,
+        Resources.SHEEP: 4,
+        Resources.WHEAT: 4,
+        Resources.ORE: 4
+    }
 
     own_settlements = []
     own_cities = []

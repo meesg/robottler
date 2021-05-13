@@ -15,7 +15,7 @@ class NaiveBot(Bot):
     def build_setup_settlement(self):
         print("Building settlement")
         settlement_index = self.find_highest_producing_vertex()
-        self.send_build_settlement(settlement_index)
+        # self.send_build_settlement(settlement_index)
 
     # overriding abstract method
     def build_setup_road(self):
@@ -28,8 +28,8 @@ class NaiveBot(Bot):
         self.send_build_road(road_index)
 
     # overriding abstract method
-    def use_turn(self):
-        print("Using turn")
+    def start_turn(self):
+        print("Starting turn")
         self.next_purchase = self.calculate_next_purchase()
         print("next_purchase: {0}".format(self.next_purchase))
 
@@ -204,7 +204,7 @@ class NaiveBot(Bot):
         return high_index
 
     def trade_with_bank(self):
-        print("trade with bank")
+        print("trade_with_bank()")
 
         if self.distance_from_cards(COSTS[self.next_purchase], self.board.resources) == 0:
             return
@@ -213,11 +213,8 @@ class NaiveBot(Bot):
         print(COSTS[self.next_purchase])
         for resource, amount in COSTS[self.next_purchase].items():
             extra_resources[resource] -= amount
-        print("extra_resources: {0}".format(extra_resources))
-        
+
         dist, missing = self.calc_missing_cards(COSTS[self.next_purchase], self.board.resources)
-        print("dist: {0}".format(dist))
-        print("missing: {0}".format(missing))
 
         print(list(missing)[0].value)
         
@@ -225,20 +222,17 @@ class NaiveBot(Bot):
         while traded:
             traded = False
             for resource in Resources:
-                print("Extra {0} : {1}".format(resource, extra_resources[resource]))
-                if extra_resources[resource] >= 4:
-                    print("Starting 4:1 trade")
+                offer_amount = self.board.bank_trades[resource]
+                if extra_resources[resource] >= offer_amount:
+                    print("Starting bank trade")
 
-                    offered = [resource.value for x in range(4)]
+                    offered = [resource.value for x in range(offer_amount)]
                     wanted = [list(missing)[0].value]
-
-                    print("offered : {0}".format(offered))
-                    print("wanted : {0}".format(wanted))
 
                     self.send_create_trade(offered, wanted)
                     self.trading = True
 
-                    extra_resources[resource] -= 4
+                    extra_resources[resource] -= offer_amount
                     missing[list(missing)[0]] -= 1
 
                     if missing[list(missing)[0]] <= 0:

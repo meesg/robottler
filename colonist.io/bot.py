@@ -58,7 +58,7 @@ async def consumer_handler(websocket, _path):
                             print("afhadfhs")
                             throw_dice()
                     if data.currentTurnState == 2:
-                        BOT.use_turn()
+                        BOT.start_turn()
             # TODO: remember the player next to tile we place robber on
             # so we can do the logic on the turn logic package
             elif hasattr(data, "allowableActionState"):
@@ -143,19 +143,32 @@ def update_vertex(new_vertex_info):
     vertex.owner = new_vertex_info.owner
     vertex.buildingType = new_vertex_info.buildingType
 
-    if vertex.owner == 1:
+    if vertex.owner == PLAYER_COLOR:
+        # Update own building information
         if vertex.buildingType == 1:
             BOARD.own_settlements.append(vertex_index)
         if vertex.buildingType == 2:
             BOARD.own_settlements.remove(vertex_index)
             BOARD.own_cities.append(vertex_index)
 
+        # Update production
         tiles = BOARD.vertex_tiles[vertex_index]
-        for tile_index in tiles:
+        for tile_index in tiles:            
             tile = BOARD.tiles[tile_index]
+
             if hasattr(tile, "_diceProbability"):
                 BOARD.own_production[Resources(tile.tileType)] += tile._diceProbability
+        
+        # Update bank trades
+        if vertex.harborType != 0:
+            if vertex.harborType == 1:
+                for resource in Resources:
+                    if BOARD.bank_trades[resource] > 3:
+                        BOARD.bank_trades[resource] = 3
+            else:
+                BOARD.bank_trades[Resources(vertex.harborType - 1)] = 2
 
+    # Remove neighbour vertices from future settlement placement
     neighbours = BOARD.adjacency_map[vertex_index]
     for neighbour in neighbours:
         print("Restricting neighbour: {0}".format(neighbour["vertex_index"]))
