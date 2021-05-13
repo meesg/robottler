@@ -23,7 +23,7 @@ class Board:
         Resources.WHEAT: 0,
         Resources.ORE: 0
     }
-    
+
     bank_trades = {
         Resources.WOOD: 4,
         Resources.BRICK: 4,
@@ -34,6 +34,8 @@ class Board:
 
     own_settlements = []
     own_cities = []
+    own_harbors = set()
+
     adjacency_map = []
     vertex_tiles = []
     tile_vertices = []
@@ -177,4 +179,28 @@ class Board:
             if not hasattr(tile, '_diceProbability'):
                 continue
             prod += tile._diceProbability
+        return prod
+
+    def find_vertex_production_per_resource_by_index(self, vertex_index):
+        print("find_vertex_production_per_resource_by_index(self, {0})".format(vertex_index))
+
+        prod = {
+            Resources.WOOD: 0,
+            Resources.BRICK: 0,
+            Resources.SHEEP: 0,
+            Resources.WHEAT: 0,
+            Resources.ORE: 0
+        }
+
+        tile_indices = self.vertex_tiles[vertex_index]
+
+        for tile_index in tile_indices:
+            tile = self.tiles[tile_index]
+            if tile is None:
+                continue
+            if not hasattr(tile, '_diceProbability'):
+                continue
+            prod[Resources(tile.tileType)] += tile._diceProbability
+
+        print(prod)
         return prod

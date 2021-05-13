@@ -175,6 +175,7 @@ def update_vertex(new_vertex_info):
 
         # Update bank trades
         if vertex.harborType != 0:
+            BOARD.own_harbors.add(vertex.harborType)
             if vertex.harborType == 1:
                 for resource in Resources:
                     if BOARD.bank_trades[resource] > 3:
