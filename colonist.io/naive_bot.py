@@ -1,3 +1,4 @@
+import asyncio
 import copy
 from abstract_bot import Bot
 from costs import COSTS
@@ -7,6 +8,7 @@ from resources import Resources
 class NaiveBot(Bot):
     next_purchase = None
     trading = False
+    trade_event = None
 
     def __init__(self, board, own_color, queue):
         super().__init__(board, own_color, queue)
@@ -15,26 +17,26 @@ class NaiveBot(Bot):
     def build_setup_settlement(self):
         print("Building settlement")
         settlement_index = self.find_highest_producing_vertex()
-        # self.send_build_settlement(settlement_index)
+        self.send_build_settlement(settlement_index)
 
     # overriding abstract method
     def build_setup_road(self):
         print("Building road")
         _, road_index = self.find_next_settlement(self.board.own_settlements[-1], True)
-        print(road_index)
+
         if road_index is None:
             print("road_index == None")
-            road_index = self.board.adjacency_map[self.board.own_settlements[-1]][0]["edge_id"]
+            road_index = self.board.adjacency_map[self.board.own_settlements[-1]][0]["edge_index"]
         self.send_build_road(road_index)
 
     # overriding abstract method
-    def start_turn(self):
+    async def start_turn(self):
         print("Starting turn")
         self.next_purchase = self.calculate_next_purchase()
         print("next_purchase: {0}".format(self.next_purchase))
 
         if self.distance_from_cards(COSTS[self.next_purchase], self.board.resources) > 0:
-            self.trade_with_bank()
+            await self.trade_with_bank()
         if self.distance_from_cards(COSTS[self.next_purchase], self.board.resources) == 0:
             settlement_index, road_index = self.find_next_settlement()
             if self.next_purchase == PurchaseType.ROAD:
@@ -203,7 +205,12 @@ class NaiveBot(Bot):
 
         return high_index
 
-    def trade_with_bank(self):
+    async def waiter(self, event):
+        print('waiting for it ...')
+        await event.wait()
+        print('... got it!')
+
+    async def trade_with_bank(self):
         print("trade_with_bank()")
 
         if self.distance_from_cards(COSTS[self.next_purchase], self.board.resources) == 0:
@@ -230,7 +237,11 @@ class NaiveBot(Bot):
                     wanted = [list(missing)[0].value]
 
                     self.send_create_trade(offered, wanted)
-                    self.trading = True
+                    self.trade_event = asyncio.Event()
+                    print("waiting for trade_event")
+                    waiter_task = asyncio.create_task(self.waiter(self.trade_event))
+                    await waiter_task
+                    print("done waiting for trade_event")
 
                     extra_resources[resource] -= offer_amount
                     missing[list(missing)[0]] -= 1

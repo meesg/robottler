@@ -18,7 +18,9 @@ QUEUE = None
 class GameState(Enum):
     SETUP_SETTLEMENT = 0
     SETUP_ROAD = 1
-    NORMAL_TURNS = 2
+    THROW_DICE = 2
+    PLAYER_TURN = 3
+    OPPONENT_TURN = 4
 GAME_STATE = GameState.SETUP_SETTLEMENT
 
 BOT = None
@@ -36,6 +38,9 @@ async def consumer_handler(websocket, _path):
             elif hasattr(data, "currentTurnState"):  # Game state information
                 global GAME_STATE
 
+                if data.currentTurnState == 1 and data.currentTurnPlayerColor != PLAYER_COLOR:
+                    GAME_STATE = GameState.OPPONENT_TURN
+
                 if data.currentTurnPlayerColor == PLAYER_COLOR:
                     # need to be outside the currentTurnState ifs,
                     # because it can happen in both turnstate 1 and 2
@@ -52,13 +57,15 @@ async def consumer_handler(websocket, _path):
                             if len(BOARD.own_settlements) < 2:
                                 GAME_STATE = GameState.SETUP_SETTLEMENT
                             else:
-                                GAME_STATE = GameState.NORMAL_TURNS
+                                GAME_STATE = GameState.OPPONENT_TURN
                     if data.currentTurnState == 1:
-                        if data.currentActionState == 0:
-                            print("afhadfhs")
+                        if data.currentActionState == 0 and GAME_STATE == GameState.OPPONENT_TURN:
+                            GAME_STATE = GameState.THROW_DICE
                             throw_dice()
                     if data.currentTurnState == 2:
-                        BOT.start_turn()
+                        if GAME_STATE == GameState.THROW_DICE:
+                            GAME_STATE = GameState.PLAYER_TURN
+                            task = asyncio.create_task(BOT.start_turn())
             # TODO: remember the player next to tile we place robber on
             # so we can do the logic on the turn logic package
             elif hasattr(data, "allowableActionState"):
@@ -70,6 +77,8 @@ async def consumer_handler(websocket, _path):
                 amount = data.selectCardFormat.amountOfCardsToSelect
                 BOT.discard_cards(amount)
             elif hasattr(data, "givingPlayer"):  # Trade information
+                print("givingPlayer")
+
                 if data.givingPlayer == PLAYER_COLOR:
                     for card in data.givingCards:
                         BOARD.resources[Resources(card)] -= 1
@@ -80,8 +89,13 @@ async def consumer_handler(websocket, _path):
                         BOARD.resources[Resources(card)] += 1
                     for card in data.receivingCards:
                         BOARD.resources[Resources(card)] -= 1
+
+                if BOT.trade_event is not None:
+                    print("trade event set")
+                    BOT.trade_event.set()
             elif hasattr(data, "offeredResources"):  # Active trade offer
                 print("offeredResources")
+
                 # Check if we're allowed to take this trade and have to respond
                 for player_actions in data.actions:
                     if player_actions.player == PLAYER_COLOR:
@@ -153,12 +167,12 @@ def update_vertex(new_vertex_info):
 
         # Update production
         tiles = BOARD.vertex_tiles[vertex_index]
-        for tile_index in tiles:            
+        for tile_index in tiles:
             tile = BOARD.tiles[tile_index]
 
             if hasattr(tile, "_diceProbability"):
                 BOARD.own_production[Resources(tile.tileType)] += tile._diceProbability
-        
+
         # Update bank trades
         if vertex.harborType != 0:
             if vertex.harborType == 1:

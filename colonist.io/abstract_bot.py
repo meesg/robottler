@@ -20,7 +20,7 @@ class Bot(ABC):
         pass
 
     @abstractmethod
-    def start_turn(self):
+    async def start_turn(self):
         pass
 
     @abstractmethod
