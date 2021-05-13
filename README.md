@@ -9,6 +9,7 @@
 ### Strategy
  - [ ] Place initial settlements based on a score, which takes into account: current production, new production, harbor
  - [ ] Think multiple steps ahead in trade (road -> settlement)
+ - [ ] Take into account possible bank trades when discarding cards
 
 ### Trade
  - [ ] Create 1:1 trades with opponent, 2:1 if it is a resource with < 3 own production
