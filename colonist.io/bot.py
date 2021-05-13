@@ -9,9 +9,7 @@ from board import Board
 from resources import Resources
 from naive_bot import NaiveBot
 
-# TODO: find a way to find this procedurally in ingame lobbies,
-# in standard bot games this works because you're always red (=1)
-PLAYER_COLOR = 1
+PLAYER_COLOR = None
 BOARD = None
 QUEUE = None
 
@@ -26,12 +24,14 @@ GAME_STATE = GameState.SETUP_SETTLEMENT
 BOT = None
 
 async def consumer_handler(websocket, _path):
-    print("here")
     async for message in websocket:
         try:
             data = json.loads(
                 message, object_hook=lambda d: SimpleNamespace(**d))
-            if hasattr(data, "tileState"):  # Board information
+            if hasattr(data, "myColor"):
+                global PLAYER_COLOR
+                PLAYER_COLOR = data.myColor
+            elif hasattr(data, "tileState"):  # Board information
                 global BOARD
                 BOARD = Board(data)
                 BOT = NaiveBot(BOARD, PLAYER_COLOR, QUEUE)
