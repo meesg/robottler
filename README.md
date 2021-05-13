@@ -1,8 +1,8 @@
 # TODO
 ### General
  - [ ] Make sure userscript runs before other javascript to make sure WebSocket is intercepted (right now it seems like a 50/50 sometimes)
- - [ ] Use a linter and formatter
- - [ ] Split off the communication from the bot logic
+ - [x] Use a linter and formatter
+ - [x] Split off the communication from the bot logic
  - [ ] Store tiles in graph and rewrite old functions to use it. (Not quicker, but cleaner because we don't have special cases for z=0 and z=1)
 
 ### Initial settlements
@@ -17,14 +17,14 @@
  - [x] When all the roads are build, build settlement
 
 ### Cities
- - [ ] Upgrade 2 highest producing settlements to cities
+ - [x] Upgrade 2 highest producing settlements to cities
 
 ### Dev cards
- - [ ] Buy dev cards
+ - [x] Buy dev cards
  - [ ] Play knight cards whenever possible
 
 ### Trading
  - [x] Create function which checks for beneficial trades
  - [x] On opponent turn accept trade if it is beneficial
- - [ ] Check if we have enough cards to trade
+ - [x] Check if we have enough cards to trade
  - [ ] On own turn post all beneficial trades
