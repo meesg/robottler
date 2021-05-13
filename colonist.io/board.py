@@ -158,3 +158,15 @@ class Board:
             if tile.hexFace.x == x and tile.hexFace.y == y:
                 return tile
         return None
+    
+    def find_vertex_production_by_index(self, vertex_index):
+        prod = 0
+        tile_indices = self.vertex_tiles[vertex_index]
+        for tile_index in tile_indices:
+            tile = self.tiles[tile_index]
+            if tile is None:
+                continue
+            if not hasattr(tile, '_diceProbability'):
+                continue
+            prod += tile._diceProbability
+        return prod
