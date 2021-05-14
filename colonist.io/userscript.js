@@ -18,9 +18,18 @@ const colonistioActions = Object.freeze({
     BUILD_SETTLEMENT: "26",
     WANT_BUILD_CITY: "27",
     BUILD_CITY: "28",
+    PLAY_DEVELOPMENT_CARD: "52",
     CREATE_TRADE: "54",
     ACCEPT_TRADE: "55",
     REJECT_TRADE: "57"
+})
+
+const devCards = Object.freeze({
+    ROBBER: 7,
+    VICTORY_POINT: 8,
+    MONOPOLY: 9,
+    ROAD_BUILDING: 10,
+    YEAR_OF_PLENTY: 11
 })
 
 const EncoderModule = (function () {
@@ -98,7 +107,7 @@ const EncoderModule = (function () {
         ,
         o.p = "/dist"
 
-        return o(540) // The module we need is located in window.webpackJsonp[0][1][540]
+        return o(548) // The module we need is located in window.webpackJsonp[0][1][540]
     }
     /* eslint-enable */
 
@@ -189,6 +198,9 @@ botSocket.onmessage = function (event) {
         tradeData.wantedResources = { allowableCardTypes: [0], cards: parsedData.data.wanted }
 
         sendEncoded({ id: colonistioActions.CREATE_TRADE, data: tradeData })
+        break
+    case 12: // Play robber
+        sendEncoded({ id: colonistioActions.PLAY_DEVELOPMENT_CARD, data: devCards.ROBBER })
         break
     }
 }

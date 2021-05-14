@@ -6,6 +6,7 @@ import json
 import websockets
 
 from board import Board
+from dev_cards import DevCards
 from resources import Resources
 from naive_bot import NaiveBot
 
@@ -16,7 +17,7 @@ QUEUE = None
 class GameState(Enum):
     SETUP_SETTLEMENT = 0
     SETUP_ROAD = 1
-    THROW_DICE = 2
+    START_TURN = 2
     PLAYER_TURN = 3
     OPPONENT_TURN = 4
 GAME_STATE = GameState.SETUP_SETTLEMENT
@@ -60,12 +61,12 @@ async def consumer_handler(websocket, _path):
                                 GAME_STATE = GameState.OPPONENT_TURN
                     if data.currentTurnState == 1:
                         if data.currentActionState == 0 and GAME_STATE == GameState.OPPONENT_TURN:
-                            GAME_STATE = GameState.THROW_DICE
-                            throw_dice()
+                            GAME_STATE = GameState.START_TURN
+                            asyncio.create_task(BOT.start_turn())
                     if data.currentTurnState == 2:
-                        if GAME_STATE == GameState.THROW_DICE:
+                        if GAME_STATE == GameState.START_TURN:
                             GAME_STATE = GameState.PLAYER_TURN
-                            task = asyncio.create_task(BOT.start_turn())
+                            asyncio.create_task(BOT.play_turn())
             # TODO: remember the player next to tile we place robber on
             # so we can do the logic on the turn logic package
             elif hasattr(data, "allowableActionState"):
@@ -77,8 +78,6 @@ async def consumer_handler(websocket, _path):
                 amount = data.selectCardFormat.amountOfCardsToSelect
                 BOT.discard_cards(amount)
             elif hasattr(data, "givingPlayer"):  # Trade information
-                print("givingPlayer")
-
                 if data.givingPlayer == PLAYER_COLOR:
                     for card in data.givingCards:
                         BOARD.resources[Resources(card)] -= 1
@@ -86,7 +85,12 @@ async def consumer_handler(websocket, _path):
                         BOARD.resources[Resources(card)] += 1
                 if data.receivingPlayer == PLAYER_COLOR:
                     for card in data.givingCards:
-                        BOARD.resources[Resources(card)] += 1
+                        if card >= 1 and card <= 5:
+                            BOARD.resources[Resources(card)] += 1
+                        else:
+                            print("Found dev card")
+                            BOARD.own_dev_cards[DevCards(card)] += 1
+                            print(BOARD.own_dev_cards)
                     for card in data.receivingCards:
                         BOARD.resources[Resources(card)] -= 1
 

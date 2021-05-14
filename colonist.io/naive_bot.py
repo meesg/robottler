@@ -1,7 +1,9 @@
 import asyncio
 import copy
+
 from abstract_bot import Bot
 from costs import COSTS
+from dev_cards import DevCards
 from purchase_types import PurchaseType
 from resources import Resources
 
@@ -30,6 +32,17 @@ class NaiveBot(Bot):
 
     # overriding abstract method
     async def start_turn(self):
+        self.send_throw_dice()
+
+    # overriding abstract method
+    async def play_turn(self):
+        if self.board.own_dev_cards[DevCards.ROBBER] > 0:
+            self.send_play_dev_card(DevCards.ROBBER)
+            trade_event =  asyncio.Event()
+            print("waiting for trade_event")
+            await self.trade_event.wait()
+            self.board.own_dev_cards[DevCards.ROBBER] -= 1
+
         print("Starting turn")
         self.next_purchase = self.calculate_next_purchase()
         print("next_purchase: {0}".format(self.next_purchase))
@@ -288,12 +301,13 @@ class NaiveBot(Bot):
 
     def calculate_next_purchase(self):
         print("calculate_next_purchase()")
+        return PurchaseType.DEV_CARD
 
-        if self.distance_from_cards(COSTS[PurchaseType.CITY], self.board.resources) < 2 and \
+        if self.distance_from_cards(COSTS[PurchaseType.CITY], self.board.resources) < 1 and \
         len(self.board.own_settlements) > 0:
             print("city")
             return PurchaseType.CITY
-        if len(self.board.own_settlements) + len(self.board.own_cities) < 3:
+        if len(self.board.own_settlements) + len(self.board.own_cities) < 4:
             print("settlement or road")
             if self.find_next_settlement()[1] is None:
                 print("settlement")

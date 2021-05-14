@@ -1,3 +1,4 @@
+from dev_cards import DevCards
 from resources import Resources
 
 
@@ -35,6 +36,13 @@ class Board:
     own_settlements = []
     own_cities = []
     own_harbors = set()
+    own_dev_cards = {
+        DevCards.ROBBER: 0,
+        DevCards.VICTORY_POINT: 0,
+        DevCards.YEAR_OF_PLENTY: 0,
+        DevCards.MONOPOLY: 0,
+        DevCards.ROAD_BUILDING: 0
+    }
 
     adjacency_map = []
     vertex_tiles = []
