@@ -17,5 +17,5 @@
  - [ ] Create 1:1 trades with opponent, 2:1 if it is a resource with < 3 own production
 
 ### Development cards
- - [ ] Play knight cards when possible
+ - [x] Play knight cards when possible
  - [ ] Implement all other playable development cards
