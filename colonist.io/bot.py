@@ -6,6 +6,7 @@ import json
 import websockets
 
 from board import Board
+from col_events import ColEvents
 from dev_cards import DevCards
 from resources import Resources
 from naive_bot import NaiveBot
@@ -88,18 +89,11 @@ async def consumer_handler(websocket, _path):
                         if card >= 1 and card <= 5:
                             BOARD.resources[Resources(card)] += 1
                         else:
-                            print("Found dev card")
                             BOARD.own_dev_cards[DevCards(card)] += 1
-                            print(BOARD.own_dev_cards)
                     for card in data.receivingCards:
                         BOARD.resources[Resources(card)] -= 1
-
-                if BOT.trade_event is not None:
-                    print("trade event set")
-                    BOT.trade_event.set()
+                BOT.handle_event(ColEvents.RECEIVED_CARDS)
             elif hasattr(data, "offeredResources"):  # Active trade offer
-                print("offeredResources")
-
                 # Check if we're allowed to take this trade and have to respond
                 for player_actions in data.actions:
                     if player_actions.player == PLAYER_COLOR:

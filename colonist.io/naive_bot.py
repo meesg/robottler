@@ -9,8 +9,7 @@ from resources import Resources
 
 class NaiveBot(Bot):
     next_purchase = None
-    trading = False
-    trade_event = None
+    event = None
 
     def __init__(self, board, own_color, queue):
         super().__init__(board, own_color, queue)
@@ -38,9 +37,9 @@ class NaiveBot(Bot):
     async def play_turn(self):
         if self.board.own_dev_cards[DevCards.ROBBER] > 0:
             self.send_play_dev_card(DevCards.ROBBER)
-            trade_event =  asyncio.Event()
-            print("waiting for trade_event")
-            await self.trade_event.wait()
+            self.event = asyncio.Event()
+            print("waiting for event")
+            await self.event.wait()
             self.board.own_dev_cards[DevCards.ROBBER] -= 1
 
         print("Starting turn")
@@ -60,8 +59,7 @@ class NaiveBot(Bot):
             if self.next_purchase == PurchaseType.DEV_CARD:
                 self.send_buy_dev_card()
 
-        if not self.trading:
-            self.send_pass_turn()
+        self.send_pass_turn()
 
     # overriding abstract method
     def move_robber(self):
@@ -74,6 +72,8 @@ class NaiveBot(Bot):
     def rob(self, options):
         print("Robbing")
         self.send_rob(options[0])
+        if self.event is not None:
+            self.event.set()
 
     # overriding abstract method
     def discard_cards(self, amount):
@@ -92,6 +92,11 @@ class NaiveBot(Bot):
             self.send_accept_trade(data.id)
         else:
             self.send_reject_trade(data.id)
+
+    # overriding abstract method
+    def handle_event(self, event_type):
+        if self.event is not None:
+            self.event.set()
 
     def find_next_settlement(self, settlement_index=None, is_setup=False):
         candidates = []
@@ -284,10 +289,10 @@ class NaiveBot(Bot):
                     wanted = [list(missing)[0].value]
 
                     self.send_create_trade(offered, wanted)
-                    self.trade_event = asyncio.Event()
-                    print("waiting for trade_event")
-                    await self.trade_event.wait()
-                    print("done waiting for trade_event")
+                    self.event = asyncio.Event()
+                    print("waiting for event")
+                    await self.event.wait()
+                    print("done waiting for event")
 
                     extra_resources[resource] -= offer_amount
                     missing[list(missing)[0]] -= 1
@@ -300,9 +305,8 @@ class NaiveBot(Bot):
                     
 
     def calculate_next_purchase(self):
-        print("calculate_next_purchase()")
         return PurchaseType.DEV_CARD
-
+        print("calculate_next_purchase()")
         if self.distance_from_cards(COSTS[PurchaseType.CITY], self.board.resources) < 1 and \
         len(self.board.own_settlements) > 0:
             print("city")

@@ -41,14 +41,14 @@ class Bot(ABC):
     def discard_cards(self):
         pass
 
-    # @abstractmethod
-    # def respond_to_trade(self):
-    #     pass
-    
-    # @abstractmethod
-    # def cards_given(self):
-    #     pass
-    
+    @abstractmethod
+    def respond_to_trade(self):
+        pass
+
+    @abstractmethod
+    def handle_event(self, event_type):
+        pass
+
     def send_build_road(self, edge_index):
         self.send({"action": 0, "data": edge_index})
 
