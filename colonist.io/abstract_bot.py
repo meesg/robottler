@@ -46,7 +46,19 @@ class Bot(ABC):
         pass
 
     @abstractmethod
-    def handle_event(self, event_type):
+    async def use_road_building(self):
+        pass
+
+    @abstractmethod
+    async def use_monopoly(self):
+        pass
+
+    @abstractmethod
+    async def use_year_of_plenty(self):
+        pass
+
+    @abstractmethod
+    def handle_event(self, event_type, **data):
         pass
 
     def send_build_road(self, edge_index):
@@ -79,16 +91,15 @@ class Bot(ABC):
     def send_rob(self, player):
         self.send({"action": 9, "data": player})
 
-    def send_discard_cards(self, disc_cards):
-        self.send({"action": 10, "data": disc_cards})
+    def send_select_cards(self, selection):
+        self.send({"action": 10, "data": selection})
 
     def send_create_trade(self, offered, wanted):
         data = {"offered": offered, "wanted": wanted}
         self.send({"action": 11, "data": data})
 
     def send_play_dev_card(self, card_type):
-        if card_type == DevCards.ROBBER:
-            self.send({"action": 12})
+        self.send({"action": 12, "data": DevCards(card_type).value})
 
     def send(self, data):
         data_in_json = json.dumps(data)

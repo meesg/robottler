@@ -2,6 +2,7 @@ import asyncio
 import copy
 
 from abstract_bot import Bot
+from col_events import ColEvents
 from costs import COSTS
 from dev_cards import DevCards
 from purchase_types import PurchaseType
@@ -9,7 +10,7 @@ from resources import Resources
 
 class NaiveBot(Bot):
     next_purchase = None
-    event = None
+    events = []
 
     def __init__(self, board, own_color, queue):
         super().__init__(board, own_color, queue)
@@ -36,11 +37,27 @@ class NaiveBot(Bot):
     # overriding abstract method
     async def play_turn(self):
         if self.board.own_dev_cards[DevCards.ROBBER] > 0:
+            print("Playing robber")
             self.send_play_dev_card(DevCards.ROBBER)
-            self.event = asyncio.Event()
-            print("waiting for event")
-            await self.event.wait()
+            await self.wait_event(ColEvents.ROBBER_MOVED)
+            await self.wait_event(ColEvents.RECEIVED_CARDS)
             self.board.own_dev_cards[DevCards.ROBBER] -= 1
+        elif self.board.own_dev_cards[DevCards.ROAD_BUILDING] > 0:
+            print("Playing road building")
+            self.send_play_dev_card(DevCards.ROAD_BUILDING)
+            await self.wait_event(ColEvents.EDGE_CHANGED)
+            await self.wait_event(ColEvents.EDGE_CHANGED)
+            self.board.own_dev_cards[DevCards.ROAD_BUILDING] -= 1
+        elif self.board.own_dev_cards[DevCards.MONOPOLY] > 0:
+            print("Playing monopoly")
+            self.send_play_dev_card(DevCards.MONOPOLY)
+            await self.wait_event(ColEvents.RECEIVED_CARDS)
+            self.board.own_dev_cards[DevCards.MONOPOLY] -= 1
+        elif self.board.own_dev_cards[DevCards.YEAR_OF_PLENTY] > 0:
+            print("Playing year of plenty")
+            self.send_play_dev_card(DevCards.YEAR_OF_PLENTY)
+            await self.wait_event(ColEvents.RECEIVED_CARDS)
+            self.board.own_dev_cards[DevCards.YEAR_OF_PLENTY] -= 1
 
         print("Starting turn")
         self.next_purchase = self.calculate_next_purchase()
@@ -72,14 +89,12 @@ class NaiveBot(Bot):
     def rob(self, options):
         print("Robbing")
         self.send_rob(options[0])
-        if self.event is not None:
-            self.event.set()
 
     # overriding abstract method
     def discard_cards(self, amount):
         print("Discarding cards")
         cards = self.pick_cards_to_discard(amount)
-        self.send_discard_cards(cards)
+        self.send_select_cards(cards)
 
     # TODO: Rewrite to decouple from the colonist.io API
     # overriding abstract method
@@ -94,9 +109,55 @@ class NaiveBot(Bot):
             self.send_reject_trade(data.id)
 
     # overriding abstract method
-    def handle_event(self, event_type):
-        if self.event is not None:
-            self.event.set()
+    async def use_road_building(self):
+        print("use_road_building()")
+        _, edge_index = self.find_next_settlement()
+        self.send_build_road(edge_index)
+        await self.wait_event(ColEvents.EDGE_CHANGED)
+        _, edge_index = self.find_next_settlement()
+        self.send_build_road(edge_index)
+
+    # overriding abstract method
+    async def use_monopoly(self):
+        print("use_monopoly()")
+        selected_resource = max(self.board.resources, key=self.board.resources.get)
+        print(selected_resource)
+        self.send_select_cards([selected_resource])
+
+    # overriding abstract method
+    async def use_year_of_plenty(self):
+        print("use_year_of_plenty()")
+        needed = COSTS[self.calculate_next_purchase()]
+        print(needed)
+        _, missing = self.calc_missing_cards(needed, self.board.resources)
+        print(missing)
+        missing_list = [resource.value for resource in missing.keys() for x in range(missing[resource])]
+        print(missing_list)
+        missing_list = missing_list[:2]
+        while len(missing_list) < 2:
+            missing_list.append(1)
+        print(missing_list)
+        self.send_select_cards(missing_list)
+
+    # overriding abstract method
+    def handle_event(self, event_type, **data):
+        for event in self.events:
+            if event["event_type"] == event_type:
+                event["object"].set()
+
+
+    def create_event(self, event_type, **data):
+        event = {"event_type" : event_type, "object" : asyncio.Event()}
+        event.update(data)
+        self.events.append(event)
+        return event
+    
+    async def wait_event(self, event_type, **data):
+        event = self.create_event(event_type)
+        print("waiting for event")
+        await event["object"].wait()
+        print("done waiting for event")
+        self.events.remove(event)
 
     def find_next_settlement(self, settlement_index=None, is_setup=False):
         candidates = []
@@ -287,12 +348,9 @@ class NaiveBot(Bot):
 
                     offered = [resource.value for x in range(offer_amount)]
                     wanted = [list(missing)[0].value]
-
                     self.send_create_trade(offered, wanted)
-                    self.event = asyncio.Event()
-                    print("waiting for event")
-                    await self.event.wait()
-                    print("done waiting for event")
+
+                    await self.wait_event(ColEvents.RECEIVED_CARDS)
 
                     extra_resources[resource] -= offer_amount
                     missing[list(missing)[0]] -= 1

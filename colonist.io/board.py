@@ -25,6 +25,14 @@ class Board:
         Resources.ORE: 0
     }
 
+    bank_resources = {
+        Resources.WOOD: 0,
+        Resources.BRICK: 0,
+        Resources.SHEEP: 0,
+        Resources.WHEAT: 0,
+        Resources.ORE: 0
+    }
+
     bank_trades = {
         Resources.WOOD: 4,
         Resources.BRICK: 4,

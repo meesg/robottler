@@ -10,7 +10,7 @@ const colonistioActions = Object.freeze({
     MOVE_ROBBER: "16",
     ROB_PLAYER: "18",
     PASS_TURN: "19",
-    DISCARD_CARDS: "20",
+    SELECT_CARDS: "20",
     BUY_DEVELOPMENT_CARD: "21",
     WANT_BUILD_ROAD: "22",
     BUILD_ROAD: "23",
@@ -181,7 +181,7 @@ botSocket.onmessage = function (event) {
         sendEncoded({ id: colonistioActions.ROB_PLAYER, data: parsedData.data })
         break
     case 10: // Discard cards
-        sendEncoded({ id: colonistioActions.DISCARD_CARDS, data: parsedData.data })
+        sendEncoded({ id: colonistioActions.SELECT_CARDS, data: parsedData.data })
         break
     case 11: // Trade with bank
         // Todo fix the player indexes for other than standard bot games
@@ -199,8 +199,8 @@ botSocket.onmessage = function (event) {
 
         sendEncoded({ id: colonistioActions.CREATE_TRADE, data: tradeData })
         break
-    case 12: // Play robber
-        sendEncoded({ id: colonistioActions.PLAY_DEVELOPMENT_CARD, data: devCards.ROBBER })
+    case 12: // Play development card
+        sendEncoded({ id: colonistioActions.PLAY_DEVELOPMENT_CARD, data: parsedData.data })
         break
     }
 }

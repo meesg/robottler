@@ -47,8 +47,16 @@ async def consumer_handler(websocket, _path):
                     # need to be outside the currentTurnState ifs,
                     # because it can happen in both turnstate 1 and 2
                     if data.currentActionState == 23:
-                        print("data.currentActionState == 23")
                         BOT.move_robber()
+                    elif data.currentActionState == 27:
+                        asyncio.create_task(BOT.use_road_building())
+                    # elif data.currentActionState == 28:
+                    #     BOT.handle_event(ColEvents.ROAD_BUILDING)
+                    elif data.currentActionState == 29:
+                        asyncio.create_task(BOT.use_year_of_plenty())
+                    elif data.currentActionState == 30:
+                        asyncio.create_task(BOT.use_monopoly())
+
                     if data.currentTurnState == 0:
                         if data.currentActionState == 1 and \
                            GAME_STATE == GameState.SETUP_SETTLEMENT:
@@ -104,8 +112,10 @@ async def consumer_handler(websocket, _path):
             # Settlement update (probably upgrading to a city works the same)
             elif isinstance(data, list) and hasattr(data[0], "hexCorner"):
                 update_vertex(data[0])
+                BOT.handle_event(ColEvents.VERTEX_CHANGED)
             elif isinstance(data, list) and hasattr(data[0], "hexEdge"):
                 update_edge(data[0])
+                BOT.handle_event(ColEvents.EDGE_CHANGED)
             # Cards being handed out
             elif isinstance(data, list) and hasattr(data[0], "owner"):
                 for entry in data:
@@ -119,6 +129,7 @@ async def consumer_handler(websocket, _path):
                 BOARD.robber_tile = BOARD.find_tile_index_by_coordinates(
                     loc.x, loc.y)
                 print("New robber_tile: {0}".format(BOARD.robber_tile))
+                BOT.handle_event(ColEvents.ROBBER_MOVED)
         except:
             pass
 
@@ -192,17 +203,6 @@ def update_edge(new_edge_info):
     loc = new_edge_info.hexEdge
     edge_index = BOARD.find_edge_index_by_coordinates(loc.x, loc.y, loc.z)
     BOARD.edges[edge_index].owner = new_edge_info.owner
-
-# TODO: Store tiles in a smarter way to make this a O(1) function
-
-def throw_dice():
-    send({"action": 4})
-
-
-def send(data):
-    data_in_json = json.dumps(data)
-    QUEUE.put_nowait(data_in_json)
-
 
 QUEUE = asyncio.Queue()
 start_server = websockets.serve(handler, "localhost", 8765)

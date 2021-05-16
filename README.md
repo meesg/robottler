@@ -18,4 +18,4 @@
 
 ### Development cards
  - [x] Play knight cards when possible
- - [ ] Implement all other playable development cards
+ - [x] Implement all other playable development cards
