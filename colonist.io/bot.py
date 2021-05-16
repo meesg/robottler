@@ -109,6 +109,9 @@ async def consumer_handler(websocket, _path):
                             # Respond to trade offer
                             BOT.respond_to_trade(data)
                         break
+            elif hasattr(data, "resourceCards"):
+                for resource in Resources:
+                    BOARD.bank_resources[resource] = data["resourceCards"].count(resource.value)
             # Settlement update (probably upgrading to a city works the same)
             elif isinstance(data, list) and hasattr(data[0], "hexCorner"):
                 update_vertex(data[0])

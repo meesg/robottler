@@ -1,3 +1,5 @@
+""" asdasd
+"""
 import json
 from abc import ABC, abstractmethod
 
@@ -47,15 +49,23 @@ class Bot(ABC):
 
     @abstractmethod
     async def use_road_building(self):
-        pass
+        """ Called when bot has played a road building card and now has to make use of it.
+        Needs to call send_build_road two times.
+        """
 
     @abstractmethod
     async def use_monopoly(self):
-        pass
+        """ Called when bot has played a monopoly card and now has to make use of it.
+        Needs to call send_select_cards with the chosen resource, where argument selection
+        is a list with one element: the resource value.
+        """
 
     @abstractmethod
     async def use_year_of_plenty(self):
-        pass
+        """ Called when bot has played a year of plenty card and now has to make use of it.
+        Needs to call send_select_cards with the chosen resource, where argument selection
+        is a list with two elements: the resources values.
+        """
 
     @abstractmethod
     def handle_event(self, event_type, **data):

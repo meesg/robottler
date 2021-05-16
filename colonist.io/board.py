@@ -41,6 +41,8 @@ class Board:
         Resources.ORE: 4
     }
 
+    bank_dev_cards = 25
+
     own_settlements = []
     own_cities = []
     own_harbors = set()

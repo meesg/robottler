@@ -1,6 +1,8 @@
 # TODO
 ### General
  - [ ] Make sure userscript runs before other javascript to make sure WebSocket is intercepted (right now it seems like a 50/50 sometimes)
+ - [ ] Completely decouple bot logic from colonist.io
+ - [ ] Rewrite functions in naive_bot.py to work with arbitrary board states
 
 ### Bug fixes
  - [x] Continue turn after making trade with bank
